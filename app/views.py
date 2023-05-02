@@ -1,15 +1,14 @@
-from flask import render_template, redirect, url_for, flash
-from flask_login import current_user, login_user, logout_user, login_required
-from app import app, db
-from app.forms import LoginForm, RegistrationForm
-from app.models import User
+from flask import render_template #, redirect, url_for, flash
+# from flask_login import current_user, login_user, logout_user, login_required
+from app import app #, db
+# from app.forms import LoginForm, RegistrationForm
+# from app.models import User
 
 
-@app.route('/')
-@app.route('/index')
 # @login_required
+@app.route('/')
 def index():
-    return render_template('index.html', title='Home')
+    return render_template('index.html')
 
 # @app.route('/login', methods=['GET', 'POST'])
 # def login():
