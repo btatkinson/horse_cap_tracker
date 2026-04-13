@@ -8,6 +8,12 @@ import pandas as pd
 from tqdm import tqdm
 from bs4 import BeautifulSoup
 from datetime import datetime
+from pathlib import Path
+
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+
+DATA_PATH = Path(os.environ['DATA_PATH'])
 
 ### parsing functions ###
 def parse_meta(info, restriction, purse):
@@ -20,41 +26,85 @@ def parse_meta(info, restriction, purse):
 
 
 def parse_entries(table):
-    
     table_data = []
     rows = table.find_all('tr')
+    
     for row in rows:
         cols = row.find_all('td')
-        if len(row['class']) > 0:
-            if row['class'][0] == 'scratched':
+        
+        # Skip rows that don't have enough columns (like header rows)
+        if len(cols) < 6:
+            continue
+            
+        # Check if horse is scratched
+        if len(row.get('class', [])) > 0:
+            if 'scratched' in row['class']:
                 running = 0
-                program_number = int(cols[0]['data-label'].split()[-1])
+                program_number = str(cols[0]['data-label'].split()[-1])
             else:
-                raise ValueError()
+                # Handle other classes if needed
+                running = 1
+                program_number = str(cols[0].find('img')['alt'])
         else:
             running = 1
-            program_number = int(cols[0].find('img')['alt'])
-        horse = cols[3].find('h4').text.strip()
-        sire = cols[3].find('p').text.strip()
-        trainer = cols[4].find('p').text.strip()
-        jockey = cols[4].find_all('p')[-1].text.strip()
-        morning_line_odds = cols[6].find('p').text.strip()
-        table_data.append([running, program_number, horse, sire, trainer, jockey, morning_line_odds])
+            program_number = str(cols[0].find('img')['alt'])
+        
+        # Extract horse name from the link text
+        horse_element = cols[2].find('h4')
+        if horse_element:
+            horse_link = horse_element.find('a')
+            if horse_link:
+                horse_name = horse_link.text.strip()
+            else:
+                # Scratched horses might not have a link, just text
+                horse_name = horse_element.text.strip()
+                
+                running = 0  # If there's no link, assume scratched
+        else:
+            horse_name = ''
+            running = 0  # If no horse element, assume scratched
+        
+        # Extract other fields
+        sire = cols[2].find('p').text.strip() if cols[2].find('p') else ''
+        trainer_p = cols[3].find('p')
+        trainer = trainer_p.text.strip() if trainer_p else ''
+        jockey_ps = cols[3].find_all('p')
+        jockey = jockey_ps[-1].text.strip() if jockey_ps else ''
+        ml_odds_p = cols[5].find('p')
+        morning_line_odds = ml_odds_p.text.strip() if ml_odds_p else ''
+        
+        # Append with 'horse' as program_number and 'horse_name' as the actual name
+        table_data.append([
+            running, 
+            program_number,  # This goes in 'horse' column
+            horse_name,      # This goes in 'horse_name' column
+            sire, 
+            trainer, 
+            jockey, 
+            morning_line_odds
+        ])
     
-    return pd.DataFrame(table_data, columns=['running','horse','horse_name','sire','trainer','jockey','ml_odds'])
-
+    return pd.DataFrame(
+        table_data, 
+        columns=['running', 'horse', 'horse_name', 'sire', 'trainer', 'jockey', 'ml_odds']
+    )
 
 def main():
     parser = argparse.ArgumentParser(description='Downloads results and morning lines for a given racetrack and date.')
-    parser.add_argument('--track', type=str, help='The name of the racetrack')
+    parser.add_argument('--track', type=str, required=True, help='The name of the racetrack')
+    parser.add_argument('--date', type=str, default=None,
+                        help='Date to fetch (YYYY-MM-DD). Defaults to today.')
     args = parser.parse_args()
 
-    if args.track:
-        print(f"Track: {args.track}")
+    if args.date:
+        date = args.date
+    else:
+        date = datetime.strftime(datetime.today(), '%Y-%m-%d')
 
-    date = datetime.strftime(datetime.today(),'%Y-%m-%d')
+    print(f"Track: {args.track}  Date: {date}")
     # Get the entries
     url = f"https://entries.horseracingnation.com/entries-results/{args.track}/{date}"
+    print(url)
     response = requests.get(url)
     soup = BeautifulSoup(response.content, 'html.parser')
     entry_tables = soup.find_all('table', {'class': 'table-entries'})
@@ -91,12 +141,17 @@ def main():
         
     entries = pd.concat(entries, axis=0).reset_index(drop=True)
     meta = pd.concat(meta, axis=0).reset_index(drop=True)
-    entries.to_csv(f'../data/upc_entries/{args.track}.csv', index=False)
-    meta.to_csv(f'../data/upc_meta/{args.track}.csv', index=False)
+
+    upc_dir = DATA_PATH / 'upc_entries'
+    meta_dir = DATA_PATH / 'upc_meta'
+    upc_dir.mkdir(parents=True, exist_ok=True)
+    meta_dir.mkdir(parents=True, exist_ok=True)
+
+    entries.to_csv(upc_dir / f'{args.track}.csv', index=False)
+    meta.to_csv(meta_dir / f'{args.track}.csv', index=False)
 
     print("Today's Entries: ", entries.head())
     print("\nMeta: ", meta.head())
 
 if __name__ == '__main__':
     main()
-

@@ -1,0 +1,120 @@
+running,horse,horse_name,sire,trainer,jockey,ml_odds,prior_beyer,finish,win_paid,place_paid,show_paid,actual_beyer,track,date,race
+1,1,King of Kentucky,Speightstown,Claude L. Brownfield III,Luan Machado,15/1,87.0,6.0,0,0,0,,keeneland,2026-04-10,1
+1,2,Track Ranger,Hightail,David Jacobson,Tyler Gaffalione,9/2,54.0,7.0,0,0,0,,keeneland,2026-04-10,1
+1,3,Tagliatelle,Tapwrit,Eric N. Foster,Gabriel Saez,6/1,110.0,1.0,$12.46,$3.86,$2.84,120.0,keeneland,2026-04-10,1
+1,4,Midnight Pranks,Into Mischief,Robertino Diodoro,Adam Beschizza,10/1,114.0,8.0,0,0,0,,keeneland,2026-04-10,1
+1,5,Chado,American Freedom,Brittany A. Vanden Berg,Christopher A. Emigh,8/1,50.0,3.0,0,0,$4.24,114.0,keeneland,2026-04-10,1
+1,6,Bebedouro,Fed Biz,Robertino Diodoro,Flavien Prat,7/2,112.0,4.0,0,0,0,114.0,keeneland,2026-04-10,1
+1,7,Curahee,War of Will,Joe Sharp,Jose L. Ortiz,6/5,115.0,2.0,0,$2.34,$2.10,118.0,keeneland,2026-04-10,1
+1,1,Nash Potatoes,Mendelssohn,Troy Newton,Danny Sheehy,8/1,90.0,1.0,$12.34,$5.94,$3.60,103.0,keeneland,2026-04-10,2
+1,2,Props,Street Sense,J. Keith Desormeaux,James Graham,6/1,80.0,4.0,0,0,0,88.0,keeneland,2026-04-10,2
+1,3,El Oso,Free Drop Billy,Tirso Rivera,Agustin Gomez,30/1,65.0,11.0,0,0,0,,keeneland,2026-04-10,2
+1,4,King of Salsa,Mineshaft,Michelle Nihei,Gerardo Corrales,15/1,77.0,6.0,0,0,0,,keeneland,2026-04-10,2
+1,5,Twenty Two Black,Maclean's Music,Kenneth G. McPeek,"Brian Joseph Hernandez, Jr.",2/1,85.0,12.0,0,0,0,,keeneland,2026-04-10,2
+1,6,Market Watch,Instagrand,Michael J. Maker,Flavien Prat,8/1,73.0,8.0,0,0,0,,keeneland,2026-04-10,2
+1,7,Field Study,Maxfield,David Jacobson,Axel Concepcion,20/1,69.0,10.0,0,0,0,,keeneland,2026-04-10,2
+1,8,Lennie G,Promises Fulfilled,Dale L. Romans,Corey J. Lanerie,12/1,77.0,13.0,0,0,0,,keeneland,2026-04-10,2
+1,9,The Reinbow Factor,The Factor,Michael R. Thompson,Gabriel Saez,30/1,75.0,7.0,0,0,0,,keeneland,2026-04-10,2
+1,10,Mandy's Man Can,Paynter,Paulo H. Lobo,Walter A. Rodriguez,10/1,86.0,3.0,0,0,$4.22,99.0,keeneland,2026-04-10,2
+1,11,Silver Dime,Silver State,Corie Anderson,Luis Saez,30/1,,9.0,0,0,0,,keeneland,2026-04-10,2
+1,12,He's All Heart,Heart to Heart,Michael J. Maker,Juan J. Hernandez,9/2,85.0,2.0,0,$5.74,$3.78,100.0,keeneland,2026-04-10,2
+1,13,September Silver,Liam's Map,Dallas Stewart,Axel Concepcion,15/1,97.0,14.0,0,0,0,,keeneland,2026-04-10,2
+1,14,Southern Soul,Authentic,Ismael Bahena,Summer Pauly,20/1,48.0,15.0,0,0,0,,keeneland,2026-04-10,2
+1,15,Frosted Mug,Frosted,Ian R. Wilkes,Edgard J. Zayas,12/1,94.0,16.0,0,0,0,,keeneland,2026-04-10,2
+1,16,Beale Street Boy,Street Sense,Ben Colebrook,Luan Machado,10/1,80.0,17.0,0,0,0,,keeneland,2026-04-10,2
+1,1,Touch of Fire,Constitution,Brad H. Cox,"Irad Ortiz, Jr.",9/5,105.0,1.0,$4.22,$2.90,$2.60,98.0,keeneland,2026-04-10,3
+1,2,Zeus's Echo,By My Standards,Christopher Davis,John R. Velazquez,20/1,100.0,4.0,0,0,0,95.0,keeneland,2026-04-10,3
+1,3,Third Coast,Uncle Mo,Thomas F. Proctor,Samuel Marin,15/1,93.0,6.0,0,0,0,,keeneland,2026-04-10,3
+1,4,Time for Money,Not This Time,John Ennis,Edgar Morales,30/1,75.0,10.0,0,0,0,,keeneland,2026-04-10,3
+1,5,Tacticality,Essential Quality,Chad C. Brown,Flavien Prat,9/2,110.0,11.0,0,0,0,,keeneland,2026-04-10,3
+1,6,Hayes Goal,Medaglia d'Oro,John Ennis,Danny Sheehy,30/1,98.0,12.0,0,0,0,,keeneland,2026-04-10,3
+1,7,Mendels Mate,Mendelssohn,Joe Sharp,Tyler Gaffalione,15/1,100.0,2.0,0,$9.76,$7.24,98.0,keeneland,2026-04-10,3
+1,8,Mischief Ride,Maximus Mischief,Bobby C. Barnett,Mario Gutierrez,12/1,98.0,9.0,0,0,0,,keeneland,2026-04-10,3
+1,9,J J Grey,Street Boss,Kenneth G. McPeek,"Brian Joseph Hernandez, Jr.",6/1,84.0,8.0,0,0,0,,keeneland,2026-04-10,3
+1,10,Khetam,Essential Quality,Andrew McKeever,James Graham,20/1,95.0,13.0,0,0,0,,keeneland,2026-04-10,3
+1,11,Chambersville,Twirling Candy,Kenneth G. McPeek,Jose L. Ortiz,10/1,100.0,3.0,0,0,$7.22,96.0,keeneland,2026-04-10,3
+1,12,Doctrine,Constitution,Brad H. Cox,Luis Saez,6/1,105.0,7.0,0,0,0,,keeneland,2026-04-10,3
+1,13,Knoty Knicks,Knicks Go,Jeff Engler,Corey J. Lanerie,5/1,111.0,14.0,0,0,0,,keeneland,2026-04-10,3
+1,14,McCready,Practical Joke,McLean Robertson,Julien R. Leparoux,12/1,103.0,15.0,0,0,0,,keeneland,2026-04-10,3
+1,15,Gairloch,McKinzie,Brendan P. Walsh,Ben Curtis,6/1,102.0,16.0,0,0,0,,keeneland,2026-04-10,3
+1,16,Patrol Squad Six,Midshipman,Dale L. Romans,Junior Alvarado,4/1,111.0,17.0,0,0,0,,keeneland,2026-04-10,3
+1,1,Hot Property,Medaglia d'Oro,Brad H. Cox,"Irad Ortiz, Jr.",7/2,103.0,3.0,0,0,$2.40,106.0,keeneland,2026-04-10,4
+1,2,Profound,Twirling Candy,William Walden,Flavien Prat,3/1,108.0,2.0,0,$2.64,$2.10,107.0,keeneland,2026-04-10,4
+1,3,Arthur Jr,Authentic,Kinnon LaRose,Jose L. Ortiz,6/1,88.0,1.0,$8.90,$3.80,$2.54,108.0,keeneland,2026-04-10,4
+1,4,Maximum Promise,Maximum Security,Kenneth G. McPeek,"Brian Joseph Hernandez, Jr.",8/5,100.0,9.0,0,0,0,,keeneland,2026-04-10,4
+1,5,Sound Cause,Brody's Cause,Steven M. Asmussen,Tyler Gaffalione,12/1,92.0,4.0,0,0,0,96.0,keeneland,2026-04-10,4
+1,6,Aguila Negra,Catholic Boy,Juan Carlos Perez,Jann N. Hernandez,8/1,102.0,8.0,0,0,0,,keeneland,2026-04-10,4
+1,7,Hard Spun to Run,Hard Spun,W. Bret Calhoun,Axel Concepcion,15/1,99.0,7.0,0,0,0,,keeneland,2026-04-10,4
+1,8,Dewy's Denali,Violence,Reina E. Gonzalez,William Antongeorgi III,30/1,88.0,6.0,0,0,0,,keeneland,2026-04-10,4
+1,1,Goats On a Tree,Bolt d'Oro,Michael J. Maker,Juan J. Hernandez,12/1,91.0,7.0,0,0,0,,keeneland,2026-04-10,5
+1,2,Vina Arana (IRE),Make Believe (GB),Jack Sisterson,Adam Beschizza,20/1,84.0,4.0,0,0,0,110.0,keeneland,2026-04-10,5
+1,3,Somethinabouther,Mendelssohn,Brendan P. Walsh,"Irad Ortiz, Jr.",6/1,106.0,3.0,0,0,$4.22,112.0,keeneland,2026-04-10,5
+1,4,Deloraine,Candy Ride (ARG),Eoin G. Harty,Walter A. Rodriguez,30/1,107.0,10.0,0,0,0,,keeneland,2026-04-10,5
+1,5,Ceniza Pampa (ARG),Hat Ninja (ARG),Horacio De Paz,John R. Velazquez,20/1,,8.0,0,0,0,,keeneland,2026-04-10,5
+1,6,Wind Flower,Constitution,William I. Mott,Junior Alvarado,8/1,118.0,12.0,0,0,0,,keeneland,2026-04-10,5
+1,7,In the Stars,Into Mischief,George R. Arnold II,Luis Saez,5/1,109.0,1.0,$13.56,$7.40,$3.84,112.0,keeneland,2026-04-10,5
+1,8,Bracelet,Authentic,Brad H. Cox,Flavien Prat,9/2,100.0,2.0,0,$6.08,$4.02,112.0,keeneland,2026-04-10,5
+1,9,Daisy Flyer,Mshawish,George R. Arnold II,Axel Concepcion,6/1,108.0,9.0,0,0,0,,keeneland,2026-04-10,5
+1,10,Onemoredance (IRE),King of Change (GB),Brendan P. Walsh,Tyler Gaffalione,6/1,,13.0,0,0,0,,keeneland,2026-04-10,5
+1,11,Caviar Breakfast,Mendelssohn,Kenneth G. McPeek,"Brian Joseph Hernandez, Jr.",12/1,93.0,11.0,0,0,0,,keeneland,2026-04-10,5
+1,12,Lady Ilze (GB),Territories (IRE),Mark E. Casse,Jose L. Ortiz,8/1,128.0,6.0,0,0,0,,keeneland,2026-04-10,5
+1,13,Strong Destiny,Constitution,Matthew P. Sims,Fernando De La Cruz,6/1,109.0,14.0,0,0,0,,keeneland,2026-04-10,5
+1,14,Exclusive Star,American Pharoah,Eddie Kenneally,Ben Curtis,8/1,123.0,15.0,0,0,0,,keeneland,2026-04-10,5
+1,15,Classy'n Connected,Connect,"Thomas Drury, Jr.",Julien R. Leparoux,15/1,89.0,16.0,0,0,0,,keeneland,2026-04-10,5
+1,16,Mahra's Love (IRE),Dark Angel (IRE),Michelle Nihei,Gerardo Corrales,20/1,88.0,17.0,0,0,0,,keeneland,2026-04-10,5
+1,1,Torre Eiffel,Cupid,Jose Luiz Aranha,Luan Machado,6/1,90.0,9.0,0,0,0,,keeneland,2026-04-10,6
+1,2,Great Moment,Flatter,Gregory D. Foley,Tyler Gaffalione,7/2,124.0,3.0,0,0,$3.14,105.0,keeneland,2026-04-10,6
+1,3,Puteketeke,Omaha Beach,Michael J. Maker,Flavien Prat,2/1,103.0,2.0,0,$6.00,$3.42,106.0,keeneland,2026-04-10,6
+1,4,Mizzou,Munnings,George Weaver,John R. Velazquez,5/2,100.0,7.0,0,0,0,,keeneland,2026-04-10,6
+1,5,Perrylu,Liam's Map,Victoria H. Oliver,Luis Saez,15/1,93.0,8.0,0,0,0,,keeneland,2026-04-10,6
+1,6,Culper Code,Independence Hall,Kenneth G. McPeek,"Brian Joseph Hernandez, Jr.",8/1,,6.0,0,0,0,,keeneland,2026-04-10,6
+1,7,Ring Curl,Curlin,Troy S. Wismer,William Antongeorgi III,30/1,57.0,1.0,$93.00,$34.30,$9.94,108.0,keeneland,2026-04-10,6
+1,8,Awesome Beat,Point of Entry,David Jacobson,Jose L. Ortiz,12/1,97.0,4.0,0,0,0,92.0,keeneland,2026-04-10,6
+1,1,Sapphire Beach (IRE),No Nay Never,George R. Arnold II,Jose L. Ortiz,10/1,100.0,2.0,0,$9.08,$4.36,104.0,keeneland,2026-04-10,7
+1,2,Pure Eloquence,Known Agenda,Jack Sisterson,Tyler Gaffalione,20/1,112.0,11.0,0,0,0,,keeneland,2026-04-10,7
+1,3,Map of the Moon,Liam's Map,Kelsey Danner,Axel Concepcion,15/1,88.0,8.0,0,0,0,,keeneland,2026-04-10,7
+1,4,Quiet Street,Street Boss,William I. Mott,Junior Alvarado,10/1,83.0,9.0,0,0,0,,keeneland,2026-04-10,7
+1,5,Light Won Up,City of Light,Doug F. O'Neill,Antonio Fresu,8/1,87.0,4.0,0,0,0,98.0,keeneland,2026-04-10,7
+1,6,Debbie Doll,Liam's Map,Robert Medina,Javier Castellano,30/1,102.0,12.0,0,0,0,,keeneland,2026-04-10,7
+1,7,Candy Talking,Authentic,McLean Robertson,James Graham,20/1,109.0,13.0,0,0,0,,keeneland,2026-04-10,7
+1,8,Lennilu,Leinster,Patrick L. Biancone,Luis Saez,9/2,87.0,6.0,0,0,0,,keeneland,2026-04-10,7
+1,9,Cy Fair,Not This Time,George Weaver,"Irad Ortiz, Jr.",9/5,86.0,3.0,0,0,$2.32,103.0,keeneland,2026-04-10,7
+1,10,Snow Face Princess,Midshipman,Steven M. Asmussen,Flavien Prat,6/1,87.0,10.0,0,0,0,,keeneland,2026-04-10,7
+1,11,Slay the Day,Into Mischief,Brian A. Lynch,John R. Velazquez,15/1,104.0,1.0,$16.14,$8.10,$3.96,105.0,keeneland,2026-04-10,7
+1,12,Should've,Not This Time,Wesley A. Ward,Joel Rosario,20/1,95.0,7.0,0,0,0,,keeneland,2026-04-10,7
+1,13,Midnight Martini,Yaupon,Mark E. Casse,Javier Castellano,20/1,93.0,14.0,0,0,0,,keeneland,2026-04-10,7
+1,14,Will Happen,Vekoma,Richard Baltas,John R. Velazquez,30/1,83.0,15.0,0,0,0,,keeneland,2026-04-10,7
+1,1,Ginger Zip,Ghostzapper,David Jacobson,Jose L. Ortiz,20/1,94.0,8.0,0,0,0,,keeneland,2026-04-10,8
+1,2,Tetiaroa,Vekoma,Philip A. Bauer,"Irad Ortiz, Jr.",10/1,92.0,6.0,0,0,0,,keeneland,2026-04-10,8
+1,3,Keyana,Omaha Beach,Daniel Leitch,Joel Rosario,15/1,90.0,9.0,0,0,0,,keeneland,2026-04-10,8
+1,4,Cut to the Chase,Complexity,Wesley A. Ward,John R. Velazquez,5/2,109.0,1.0,$6.02,$3.58,$2.94,109.0,keeneland,2026-04-10,8
+1,5,Chatter,Vekoma,"Saffie A. Joseph, Jr.",Tyler Gaffalione,7/2,98.0,2.0,0,$4.62,$3.74,103.0,keeneland,2026-04-10,8
+1,6,She's a Gemma,Nyquist,William I. Mott,Luis Saez,9/5,118.0,4.0,0,0,0,99.0,keeneland,2026-04-10,8
+1,7,Going Steady,Constitution,Robert Medina,Flavien Prat,10/1,98.0,7.0,0,0,0,,keeneland,2026-04-10,8
+1,8,Autumn Rhythm,Vekoma,Eddie Kenneally,Ben Curtis,8/1,116.0,3.0,0,0,$4.66,102.0,keeneland,2026-04-10,8
+1,1,Rhetorical,Not This Time,William Walden,"Irad Ortiz, Jr.",7/2,126.0,3.0,0,0,$3.02,113.0,keeneland,2026-04-10,9
+1,2,One Stripe (SAF),One World (SAF),H. Graham Motion,John R. Velazquez,8/1,110.0,2.0,0,$9.72,$5.54,113.0,keeneland,2026-04-10,9
+1,3,Troubleshooting,Not This Time,Gregory D. Foley,Tyler Gaffalione,30/1,97.0,9.0,0,0,0,,keeneland,2026-04-10,9
+1,4,Notable Speech (GB),Dubawi (IRE),Charles Appleby,William Buick,9/5,130.0,4.0,0,0,0,112.0,keeneland,2026-04-10,9
+1,5,Aomori City (FR),Oasis Dream (GB),Charles Appleby,Richard Mullen,20/1,121.0,7.0,0,0,0,,keeneland,2026-04-10,9
+1,6,Zulu Kingdom (IRE),Ten Sovereigns (IRE),Chad C. Brown,Flavien Prat,12/1,122.0,1.0,$12.08,$5.82,$4.62,115.0,keeneland,2026-04-10,9
+1,7,Tenacious Leader,Not This Time,Todd A. Pletcher,Luis Saez,30/1,103.0,10.0,0,0,0,,keeneland,2026-04-10,9
+1,8,Bear River,Flameaway,J. Keith Desormeaux,James Graham,30/1,99.0,11.0,0,0,0,,keeneland,2026-04-10,9
+1,9,Wolfie's Dynaghost,Ghostzapper,Brian A. Lynch,Jose L. Ortiz,8/1,110.0,12.0,0,0,0,,keeneland,2026-04-10,9
+1,10,Deterministic,Liam's Map,Miguel Clement,Kendrick Carmouche,5/1,128.0,13.0,0,0,0,,keeneland,2026-04-10,9
+1,11,Tiz Dashing,Tiz the Law,Barclay Tagg,Javier Castellano,20/1,116.0,8.0,0,0,0,,keeneland,2026-04-10,9
+1,12,Brilliant Berti,Noble Mission (GB),Cherie DeVaux,"Brian Joseph Hernandez, Jr.",20/1,109.0,6.0,0,0,0,,keeneland,2026-04-10,9
+1,13,Pitkin,Nyquist,Ian R. Wilkes,Edgard J. Zayas,30/1,118.0,14.0,0,0,0,,keeneland,2026-04-10,9
+1,1,Mr American Pie,Maclean's Music,Doug F. O'Neill,Antonio Fresu,15/1,75.0,9.0,0,0,0,,keeneland,2026-04-10,10
+1,2,Chappelle,Practical Joke,D. Whitworth Beckman,Junior Alvarado,5/2,115.0,12.0,0,0,0,,keeneland,2026-04-10,10
+1,3,Free Advice,Kantharos,Tommy Humphries,Dylan Machado,8/1,96.0,1.0,$32.88,$9.90,$3.74,103.0,keeneland,2026-04-10,10
+1,4,Hill Country,Improbable,J. Keith Desormeaux,James Graham,20/1,,7.0,0,0,0,,keeneland,2026-04-10,10
+1,5,Swaging,City of Light,Wayne M. Catalano,Jose L. Ortiz,7/2,110.0,3.0,0,0,$2.22,98.0,keeneland,2026-04-10,10
+1,6,Don's Last Ride,Candy Ride (ARG),Joe Sharp,Tyler Gaffalione,15/1,77.0,10.0,0,0,0,,keeneland,2026-04-10,10
+1,7,I'm Trouble,Into Mischief,Wesley A. Ward,John R. Velazquez,9/2,89.0,13.0,0,0,0,,keeneland,2026-04-10,10
+1,8,Sparked,Connect,Andrew McKeever,Danny Sheehy,20/1,,4.0,0,0,0,81.0,keeneland,2026-04-10,10
+1,9,Barker,Blame,Christopher Davis,Luis Saez,6/1,80.0,2.0,0,$3.88,$2.46,101.0,keeneland,2026-04-10,10
+1,10,Hewson,Nyquist,Byron G. Hughes,Martin Garcia,20/1,83.0,14.0,0,0,0,,keeneland,2026-04-10,10
+1,11,Chasing Gray,Knicks Go,Grant T. Forster,Jaime A. Torres,30/1,46.0,11.0,0,0,0,,keeneland,2026-04-10,10
+1,12,Good Sal,Curlin's Honor,Troy S. Wismer,William Antongeorgi III,30/1,,6.0,0,0,0,,keeneland,2026-04-10,10
+1,13,Blazy,Beau Liam,Ron Thompson,Andres Calleja,30/1,,8.0,0,0,0,,keeneland,2026-04-10,10

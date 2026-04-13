@@ -1,0 +1,60 @@
+running,horse,horse_name,sire,trainer,jockey,ml_odds,prior_beyer,finish,win_paid,place_paid,show_paid,actual_beyer,track,date,race
+1,1,Souper Debonair,Nyquist,Mark E. Casse,Martin Chuan,3/1,78.0,2.0,0,$5.00,$3.80,102.0,gulfstream-park,2026-04-09,1
+1,2,Landing Force,Omaha Beach,Tony Wilson,Cesar Gonzalez,20/1,70.0,7.0,0,0,0,,gulfstream-park,2026-04-09,1
+1,3,Ez Orb Not,Curlin's Honor,Joseph F. Orseno,Paco Lopez,5/2,97.0,4.0,0,0,0,97.0,gulfstream-park,2026-04-09,1
+1,4,Sir Guinness,Adios Charlie,Elizabeth L. Dobles,Miguel Angel Vasquez,8/1,88.0,6.0,0,0,0,,gulfstream-park,2026-04-09,1
+1,5,Urgency,Knicks Go,Mark E. Casse,Edwin Gonzalez,8/5,97.0,8.0,0,0,0,,gulfstream-park,2026-04-09,1
+1,6,Noble Sky,Noble Bird,Ronald B. Spatz,Yolber Torres,8/1,83.0,3.0,0,0,$4.40,99.0,gulfstream-park,2026-04-09,1
+1,7,Tiz Trouble,Tiz the Law,Lisa L. Lewis,Samy Camacho,10/1,,1.0,$18.80,$8.20,$5.80,111.0,gulfstream-park,2026-04-09,1
+1,1,Boot's On the Moon,Bucchero,Ronald B. Spatz,Yolber Torres,7/2,100.0,3.0,0,0,$4.60,109.0,gulfstream-park,2026-04-09,2
+1,2,The Dove Rules,Bucchero,"Saffie A. Joseph, Jr.",Micah J. Husbands,4/1,99.0,4.0,0,0,0,107.0,gulfstream-park,2026-04-09,2
+1,3,Flight Control,Air Force Blue,Darien Rodriguez,Diego A. Herrera,8/1,97.0,8.0,0,0,0,,gulfstream-park,2026-04-09,2
+1,4,Vayesta,Klimt,Willoughby Simpson,Mia Nicholls,12/1,97.0,2.0,0,$19.40,$6.60,111.0,gulfstream-park,2026-04-09,2
+1,5,Bad Gal Party,World of Trouble,David Fawkes,Edwin Gonzalez,3/1,92.0,6.0,0,0,0,,gulfstream-park,2026-04-09,2
+1,6,Free to Roam,Uncaptured,Steve Klesaris,Paco Lopez,5/2,88.0,7.0,0,0,0,,gulfstream-park,2026-04-09,2
+1,7,Mywifeknowsitall,Anchor Down,Gary G. Jackson,Miguel Angel Vasquez,6/1,90.0,1.0,$9.80,$6.20,$3.80,116.0,gulfstream-park,2026-04-09,2
+1,1,Here Comes Petal,Khozan,Kathleen O'Connell,Jose E. Morelos,12/1,50.0,4.0,0,0,0,52.0,gulfstream-park,2026-04-09,3
+1,2,Soda,Rushie,Tareq Moubarak,Yolber Torres,9/2,81.0,2.0,0,$4.40,$2.10,81.0,gulfstream-park,2026-04-09,3
+1,3,More Than a Shadow,Independence Hall,Javier E. Gonzalez,Leonel Reyes,2/1,72.0,7.0,0,0,0,,gulfstream-park,2026-04-09,3
+1,4,Trill,Audible,Heather Smullen,Paco Lopez,7/5,76.0,3.0,0,0,$2.10,80.0,gulfstream-park,2026-04-09,3
+1,5,Valley of Dawn,Lakerville,Herold Simms,Edgar Perez,20/1,44.0,6.0,0,0,0,,gulfstream-park,2026-04-09,3
+1,6,Pretty Geisha,First Samurai,Garrett W. Arscott,Carlos Martinez,5/1,94.0,1.0,$10.40,$5.00,$2.10,88.0,gulfstream-park,2026-04-09,3
+1,7,Queen Kwaina,Chance It,Manuel Criollo,Rajiv Maragh,20/1,46.0,8.0,0,0,0,,gulfstream-park,2026-04-09,3
+1,1,Sweet Sash,Tapiture,Rohan G. Crichton,Mia Nicholls,15/1,72.0,6.0,0,0,0,,gulfstream-park,2026-04-09,4
+1,2,Honor Her,Curlin's Honor,Devon Dougherty,Christopher Hernandez,9/2,67.0,2.0,0,$2.80,$2.40,108.0,gulfstream-park,2026-04-09,4
+1,3,Beautiful Crazy,Oscar Performance,"Victor Barboza, Jr.",Yolber Torres,6/5,96.0,1.0,$3.80,$2.20,$2.10,112.0,gulfstream-park,2026-04-09,4
+1,4,Let's Go Philly,Big Drama,Sebastian Pulgarin,Samy Camacho,6/1,73.0,3.0,0,0,$6.60,107.0,gulfstream-park,2026-04-09,4
+1,5,Speightfulelection,Speightster,Devon Dougherty,Paco Lopez,9/5,90.0,7.0,0,0,0,,gulfstream-park,2026-04-09,4
+1,6,Ellagio,Mitole,Frederick B. Labo,Jonathan Ocasio,10/1,75.0,4.0,0,0,0,92.0,gulfstream-park,2026-04-09,4
+1,1,R P Byrne (IRE),Supremacy (IRE),Wesley A. Ward,Paco Lopez,9/5,62.0,2.0,0,$4.20,$3.00,105.0,gulfstream-park,2026-04-09,5
+1,2,Groovy N Gray,Twirling Candy,Tareq Moubarak,Joe Bravo,6/1,79.0,3.0,0,0,$4.20,102.0,gulfstream-park,2026-04-09,5
+1,3,Bella Patrona,Frosted,Carlos Luis Perez,Jesus M. Rios,12/1,,7.0,0,0,0,,gulfstream-park,2026-04-09,5
+1,4,Tune Timer,Maclean's Music,Collin Maragh,Christian Maragh,15/1,,4.0,0,0,0,90.0,gulfstream-park,2026-04-09,5
+1,5,Tash Spice,Caravaggio,Riley Mott,Jorge Ruiz,15/1,,6.0,0,0,0,,gulfstream-park,2026-04-09,5
+1,6,Chance to Party,Chance It,Mary Lightner,Rajiv Maragh,10/1,71.0,1.0,$13.00,$5.60,$4.00,117.0,gulfstream-park,2026-04-09,5
+1,7,Senta Says,Uncle Chuck,"Saffie A. Joseph, Jr.",Micah J. Husbands,3/1,56.0,8.0,0,0,0,,gulfstream-park,2026-04-09,5
+1,8,Curld N Glory,Curlin's Honor,Andrea L. Puckett,Heriberto Figueroa,15/1,48.0,10.0,0,0,0,,gulfstream-park,2026-04-09,5
+1,9,Army Medic,Army Mule,Heather Smullen,Jose E. Morelos,12/1,25.0,9.0,0,0,0,,gulfstream-park,2026-04-09,5
+1,10,Lady Question,St Patrick's Day,Jose Pinchin,Samy Camacho,8/1,89.0,11.0,0,0,0,,gulfstream-park,2026-04-09,5
+1,1,Miel Et Citron,Tapwrit,Douglas J. Seyler,Jonathan Ocasio,20/1,,8.0,0,0,0,,gulfstream-park,2026-04-09,6
+1,2,Rookie Move,Not This Time,Michael J. Maker,Jose Antonio Gomez,5/2,,7.0,0,0,0,,gulfstream-park,2026-04-09,6
+1,3,Vali Vali Val,Valiant Minister,Tony Wilson,Cesar Gonzalez,15/1,67.0,3.0,0,0,$9.20,110.0,gulfstream-park,2026-04-09,6
+1,4,Ratu Jawa,Audible,Douglas J. Seyler,Shaun Bridgmohan,12/1,-1.0,1.0,$10.80,$5.20,$5.20,116.0,gulfstream-park,2026-04-09,6
+1,5,Miso Speedy,Mendelssohn,Riley Mott,Jorge Ruiz,4/1,,2.0,0,$5.60,$4.60,112.0,gulfstream-park,2026-04-09,6
+1,6,Ready Rosie Jane,Solomini,Nicholas P. Zito,Wesley Henry,15/1,,9.0,0,0,0,,gulfstream-park,2026-04-09,6
+1,7,My Lil Army Girl,Charlatan,Tareq Moubarak,Yolber Torres,9/2,83.0,4.0,0,0,0,105.0,gulfstream-park,2026-04-09,6
+1,8,Bodacious Queen,Munnings,Tareq Moubarak,Joe Bravo,9/5,58.0,6.0,0,0,0,,gulfstream-park,2026-04-09,6
+1,1,Brick City,Khozan,Ronald B. Spatz,Yolber Torres,7/2,104.0,7.0,0,0,0,,gulfstream-park,2026-04-09,7
+1,2,My Man Money,Maximus Mischief,Timothy A. Hills,Edgar Perez,10/1,77.0,4.0,0,0,0,97.0,gulfstream-park,2026-04-09,7
+1,3,Top Maverick,McCraken,Michael Lerman,Paco Lopez,5/2,87.0,1.0,$6.80,$3.00,$2.10,126.0,gulfstream-park,2026-04-09,7
+1,4,He Be Hoppin,Hoppertunity,Eduardo Nunez,Jonathan Ocasio,6/1,95.0,3.0,0,0,$2.10,103.0,gulfstream-park,2026-04-09,7
+1,5,American Tact,Tacitus,Monica McGoey,Joseph Trejos,12/1,46.0,6.0,0,0,0,,gulfstream-park,2026-04-09,7
+1,6,Crazy Red,Mitole,Monica McGoey,Victor Lara,20/1,69.0,8.0,0,0,0,,gulfstream-park,2026-04-09,7
+1,7,Ruleroftheuniverse,Sharp Azteca,"Saffie A. Joseph, Jr.",Micah J. Husbands,7/5,95.0,2.0,0,$2.60,$2.10,117.0,gulfstream-park,2026-04-09,7
+1,1,Ganador,Constitution,Antonio Sano,Nik Juarez,10/1,72.0,3.0,0,0,$2.80,111.0,gulfstream-park,2026-04-09,8
+1,2,Bolero Bay,Basin,Michael Yates,Miguel Angel Vasquez,6/1,100.0,1.0,$8.40,$4.40,$3.80,127.0,gulfstream-park,2026-04-09,8
+1,3,Ramses the Great,More Than Ready,Nolan Ramsey,Paco Lopez,9/5,108.0,6.0,0,0,0,,gulfstream-park,2026-04-09,8
+1,4,Unfair,Rock Your World,Melanie Giddings,Jose Antonio Gomez,9/2,100.0,7.0,0,0,0,,gulfstream-park,2026-04-09,8
+1,5,Madagascar,Twirling Candy,Miguel Clement,Jorge Ruiz,2/1,108.0,2.0,0,$4.60,$3.00,121.0,gulfstream-park,2026-04-09,8
+1,6,Zucchero,Mendelssohn,Michael Lerman,Micah J. Husbands,20/1,90.0,8.0,0,0,0,,gulfstream-park,2026-04-09,8
+1,7,Forza Azzurri,Mo Forza,Brian A. Lynch,Samy Camacho,6/1,104.0,4.0,0,0,0,111.0,gulfstream-park,2026-04-09,8
