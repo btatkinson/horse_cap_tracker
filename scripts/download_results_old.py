@@ -1,6 +1,5 @@
-
-
 import os
+import re
 import requests
 import argparse
 
@@ -23,7 +22,41 @@ def convert_to_float(frac_str):
             whole = 0
         frac = float(num) / float(denom)
         return whole - frac if whole < 0 else whole + frac
+
+
+def clean_horse_name(name):
+    """
+    Strip Beyer figures and other parenthetical suffixes from horse names.
+    Handles both formats:
+      - Payout: 'Suspicions (69*)'    -> 'Suspicions'
+      - Entry:  'Traject\\n(85)'       -> 'Traject'
+      - Entry:  'Without (IRE)\\n(105)' -> 'Without (IRE)'
     
+    Note: country tags like (IRE), (AUS), (GB) are KEPT - only trailing
+    numeric parentheticals (with optional *) are stripped.
+    """
+    # First remove trailing parenthetical with number: (69*), (85), (-1)
+    name = re.sub(r'\s*\n?\s*\(-?\d+\*?\)\s*$', '', name)
+    return name.strip()
+
+
+def extract_beyer(raw_name):
+    """
+    Extract Beyer speed figure from the parenthetical suffix.
+    Handles both payout format and entry format:
+      - Payout: 'Suspicions (69*)'   -> 69
+      - Entry:  'Traject\\n(85)'      -> 85
+      - Entry:  'Epic Horsepower\\n(-1)' -> -1
+      - No beyer: 'Plain Name'       -> NaN
+      - Non-numeric: 'Horse (DH)'    -> NaN
+    """
+    raw_name = raw_name.strip()
+    # Match (number) or (number*) at end, possibly with newline before
+    match = re.search(r'\((-?\d+)\*?\)\s*$', raw_name)
+    if match:
+        return int(match.group(1))
+    return np.nan
+
 
 ### parsing functions ###
 def parse_meta(info, restriction, purse):
@@ -36,8 +69,9 @@ def parse_meta(info, restriction, purse):
 
 def extract_payouts(row, finish):
     cols = row.find_all('td')
-    horse_name = cols[0].text.strip()
-    # horse_number = int(cols[1].find('img')['alt'])
+    raw_name = cols[0].text.strip()
+    horse_name = clean_horse_name(raw_name)
+    beyer = extract_beyer(raw_name)
     win_paid = cols[2].text.strip()
     place_paid = cols[3].text.strip()
     show_paid = cols[4].text.strip()
@@ -48,11 +82,16 @@ def extract_payouts(row, finish):
     if show_paid == '-':
         show_paid = 0
     
-    return [finish, horse_name, win_paid, place_paid, show_paid]
+    return [finish, horse_name, win_paid, place_paid, show_paid, beyer]
 
 def create_payout_table(table, ar):
 
     rows = table.find_all('tr')
+    
+    # Check if we actually have payout data (race might not have been run yet)
+    if len(rows) < 4:
+        return pd.DataFrame(columns=['finish','horse_name','win_paid','place_paid','show_paid','actual_beyer'])
+    
     win_row = rows[1]
     place_row = rows[2]
     show_row = rows[3]
@@ -60,12 +99,21 @@ def create_payout_table(table, ar):
     if len(rows)>=5:
         fourth_row = rows[4]
         payout_data.append(extract_payouts(fourth_row,4))
-    ar = ar.text.strip().replace('Also rans: ','')
-    ars = ar.split(', ')
-    ar_start = len(rows)
-    for i, horse in enumerate(ars):
-        payout_data.append([i+ar_start, horse, 0, 0, 0])
-    payout_data = pd.DataFrame(payout_data, columns=['finish','horse_name','win_paid','place_paid','show_paid'])
+    
+    # Parse also-rans
+    ar_text = ar.text.strip().replace('Also rans: ','')
+    if ar_text and ar_text.lower() != 'also rans:':
+        ars = ar_text.split(', ')
+        ar_start = len(rows)
+        for i, raw_name in enumerate(ars):
+            raw_name = raw_name.strip()
+            if not raw_name:
+                continue
+            horse = clean_horse_name(raw_name)
+            beyer = extract_beyer(raw_name)
+            payout_data.append([i+ar_start, horse, 0, 0, 0, beyer])
+    
+    payout_data = pd.DataFrame(payout_data, columns=['finish','horse_name','win_paid','place_paid','show_paid','actual_beyer'])
     
     return payout_data
 
@@ -109,15 +157,55 @@ def parse_entries(table):
                 program_number = str(cols[0]['data-label'].split()[-1])
         
         # New column layout (6 cols)
-        horse = cols[2].find('h4').text.strip()
+        raw_horse = cols[2].find('h4').text.strip()
         sire = cols[2].find('p').text.strip()
         trainer = cols[3].find('p').text.strip()
         jockey = cols[3].find_all('p')[-1].text.strip()
         morning_line_odds = cols[5].find('p').text.strip()
         
-        table_data.append([running, program_number, horse, sire, trainer, jockey, morning_line_odds])
+        # Extract prior Beyer from entry name if present
+        # e.g. "Traject\n(85)" or "Nonstop Vino (92)" -> prior_beyer=85 or 92
+        prior_beyer = extract_beyer(raw_horse)
+        horse = clean_horse_name(raw_horse)
+        # Also strip any remaining newlines/whitespace from the name
+        horse = ' '.join(horse.split())
+        
+        table_data.append([running, program_number, horse, sire, trainer, jockey, morning_line_odds, prior_beyer])
     
-    return pd.DataFrame(table_data, columns=['running','horse','horse_name','sire','trainer','jockey','ml_odds'])
+    return pd.DataFrame(table_data, columns=['running','horse','horse_name','sire','trainer','jockey','ml_odds','prior_beyer'])
+
+
+def assign_missing_finishes(entry_df):
+    """
+    For horses that are marked running=1 but have no finish position
+    (not in payout table or also-rans), assign finish positions after
+    the last known finisher.
+    
+    This handles the case where the also-rans list is incomplete.
+    """
+    if 'finish' not in entry_df.columns:
+        return entry_df
+    
+    running_mask = entry_df['running'] == 1
+    has_finish = entry_df['finish'].notna()
+    missing = running_mask & ~has_finish
+    
+    if missing.sum() == 0:
+        return entry_df
+    
+    # Assign finishes starting after the last known finish
+    max_finish = entry_df.loc[has_finish, 'finish'].max() if has_finish.sum() > 0 else 0
+    if pd.isna(max_finish):
+        max_finish = 0
+    
+    n_missing = missing.sum()
+    entry_df.loc[missing, 'finish'] = range(int(max_finish) + 1, int(max_finish) + 1 + n_missing)
+    entry_df.loc[missing, 'win_paid'] = 0
+    entry_df.loc[missing, 'place_paid'] = 0
+    entry_df.loc[missing, 'show_paid'] = 0
+    
+    return entry_df
+
 
 def main():
     parser = argparse.ArgumentParser(description='Downloads results and morning lines for a given racetrack and date.')
@@ -149,28 +237,9 @@ def main():
     assert(len(entry_tables) == len(race_info))
     assert(len(entry_tables) == len(race_restrictions))
     assert(len(entry_tables) == len(race_purses))
-    
-    # After scraping, before the merge, add this debug:
-    for i in range(min(1, len(entry_tables))):
-        entry_df = parse_entries(entry_tables[i])
-        payout_table = payout_tables[i]
-        also_ran = also_rans[i]
-        
-        # What names does the entry table have?
-        print("ENTRY NAMES:", entry_df['horse_name'].tolist())
-        
-        # What names does the payout table have?
-        rows = payout_table.find_all('tr')
-        for row in rows[1:4]:
-            cols = row.find_all('td')
-            print(f"PAYOUT NAME: [{cols[0].text.strip()}]")
-        
-        # What does the also-rans text look like?
-        ar_text = also_ran.text.strip().replace('Also rans: ','')
-        print(f"ALSO RANS: [{ar_text}]")
 
-        entries = []
-        meta = []
+    entries = []
+    meta = []
 
     for i in tqdm(range(len(entry_tables))):
         race_no = i+1
@@ -186,6 +255,10 @@ def main():
         entry_df = parse_entries(entry_table)
         payout_df = create_payout_table(payout_table, also_ran)
         entry_df = entry_df.merge(payout_df, on='horse_name', how='left')
+        
+        # Fill in missing finishes for horses not in payout table or also-rans
+        entry_df = assign_missing_finishes(entry_df)
+        
         entry_df['track'] = args.track
         entry_df['date'] = args.date
         entry_df['race'] = race_no
@@ -200,13 +273,26 @@ def main():
 
     entries = pd.concat(entries, axis=0).reset_index(drop=True)
     meta = pd.concat(meta, axis=0).reset_index(drop=True)
+    
+    # Ensure output directories exist
+    os.makedirs('data/entries', exist_ok=True)
+    os.makedirs('data/meta', exist_ok=True)
+    
     entries.to_csv(f'data/entries/{args.track}_{args.date}.csv', index=False)
     meta.to_csv(f'data/meta/{args.track}_{args.date}.csv', index=False)
 
-    print("Entries: ", entries.head())
-    print("\nMeta: ", meta.head())
+    # Summary
+    n_races = entries['race'].nunique()
+    n_horses = len(entries)
+    n_with_finish = entries['finish'].notna().sum()
+    n_running = (entries['running'] == 1).sum()
+    print(f"\n{n_races} races, {n_horses} horses ({n_running} running)")
+    print(f"Finish data: {n_with_finish}/{n_running} running horses have finishes")
+    
+    # Warn about any remaining gaps
+    missing = (entries['running'] == 1) & entries['finish'].isna()
+    if missing.sum() > 0:
+        print(f"WARNING: {missing.sum()} running horses still missing finish data")
         
 if __name__ == '__main__':
     main()
-
-

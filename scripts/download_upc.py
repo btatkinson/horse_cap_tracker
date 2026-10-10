@@ -63,7 +63,16 @@ def parse_entries(table):
         else:
             horse_name = ''
             running = 0  # If no horse element, assume scratched
-        
+
+        # HRN marks scratches and also-eligibles in a "Scratched?" column
+        # rather than (only) a row class. AEs run only if they draw in, so
+        # they're excluded until HRN drops the label.
+        scratch_td = row.find('td', {'data-label': 'Scratched?'})
+        scratch_txt = scratch_td.get_text(' ', strip=True).lower() if scratch_td else ''
+        also_eligible = int('also' in scratch_txt and 'elig' in scratch_txt)
+        if also_eligible or 'scr' in scratch_txt:
+            running = 0
+
         # Extract other fields
         sire = cols[2].find('p').text.strip() if cols[2].find('p') else ''
         trainer_p = cols[3].find('p')
@@ -80,13 +89,14 @@ def parse_entries(table):
             horse_name,      # This goes in 'horse_name' column
             sire, 
             trainer, 
-            jockey, 
-            morning_line_odds
+            jockey,
+            morning_line_odds,
+            also_eligible
         ])
-    
+
     return pd.DataFrame(
-        table_data, 
-        columns=['running', 'horse', 'horse_name', 'sire', 'trainer', 'jockey', 'ml_odds']
+        table_data,
+        columns=['running', 'horse', 'horse_name', 'sire', 'trainer', 'jockey', 'ml_odds', 'also_eligible']
     )
 
 def main():

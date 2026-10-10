@@ -85,10 +85,12 @@ def _normalize_date(d):
 
 # Canonical track names — maps variants to the short name used in ai_picks
 _TRACK_ALIASES = {
-    'gulfstream-park':  'gulfstream',
-    'gulfstream park':  'gulfstream',
-    'churchill-downs':  'churchill',
-    'churchill downs':  'churchill',
+    'gulfstream-park':  'gulfstream-park',
+    'gulfstream park':  'gulfstream-park',
+    'gulfstream':       'gulfstream-park',
+    'churchill-downs':  'churchill-downs',
+    'churchill downs':  'churchill-downs',
+    'churchill':          'churchill-downs',
     'santa-anita':      'santa-anita',
     'santa anita':      'santa-anita',
     'santa anita park': 'santa-anita',
@@ -223,12 +225,14 @@ def _read_source_csv(path, source_name, track_override=None):
     """Read one source CSV, normalize columns, return DataFrame."""
     df = pd.read_csv(path)
 
-    # Rename columns to {source}_beyer, {source}_win_prob
+    # Rename columns to {source}_beyer, {source}_win_prob, {source}_closing_prob
     col_map = {}
     for c in df.columns:
         cl = c.lower().strip()
         if 'beyer' in cl:
             col_map[c] = f'{source_name}_beyer'
+        elif 'closing' in cl:
+            col_map[c] = f'{source_name}_closing_prob'
         elif 'win_prob' in cl or 'prob' in cl:
             col_map[c] = f'{source_name}_win_prob'
     df = df.rename(columns=col_map)
@@ -237,7 +241,7 @@ def _read_source_csv(path, source_name, track_override=None):
     df['horse_number'] = pd.to_numeric(df['horse_number'], errors='coerce').astype('Int64')
 
     keep = ['race', 'horse_number']
-    for col in [f'{source_name}_beyer', f'{source_name}_win_prob']:
+    for col in [f'{source_name}_beyer', f'{source_name}_win_prob', f'{source_name}_closing_prob']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
             keep.append(col)
@@ -674,6 +678,24 @@ def apply_historical_experts(df, base_col, out_col):
     SCALE = 1000
     clip = 1e-4
 
+    def _get_rating_for_date(expert_name, date_str):
+        """Get expert rating as of the morning of date_str (no future info)."""
+        info = all_ratings.get(expert_name)
+        if not info:
+            return BASELINE
+        initial = info.get('initial_rating', BASELINE)
+        history = info.get('history', [])
+        rating = initial
+        for entry in sorted(history, key=lambda h: h['date']):
+            if entry['date'] < date_str:
+                rating = entry['rating_after']
+            elif entry['date'] == date_str:
+                rating = entry['rating_before']
+                break
+            else:
+                break
+        return rating
+
     df = df.copy()
     df[out_col] = df[base_col].copy()
 
@@ -724,11 +746,8 @@ def apply_historical_experts(df, base_col, out_col):
             if expert_df.empty:
                 continue
 
-            # Get weight from rating
-            if expert_name in all_ratings:
-                rating = all_ratings[expert_name]['rating']
-            else:
-                rating = BASELINE
+            # Get weight from rating (date-aware, no leakage)
+            rating = _get_rating_for_date(expert_name, date_str)
 
             weight = (rating - BASELINE) / SCALE
             if abs(weight) < 0.0001:

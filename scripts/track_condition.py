@@ -35,7 +35,7 @@ import argparse
 import os
 import pickle
 import re
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from dotenv import load_dotenv
 
@@ -43,6 +43,11 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 DATA_PATH = os.environ['DATA_PATH']
 META_PATH = os.path.join(DATA_PATH, 'historical_meta.pkl')
+
+# Race window (local time) — averaged for weather estimates.
+# Most thoroughbred cards run roughly noon to 5 PM local.
+RACE_WINDOW_START = time(12, 0)  # 12 PM
+RACE_WINDOW_END   = time(17, 0)  # 5 PM
 
 try:
     import requests
@@ -140,8 +145,119 @@ def get_equibase_conditions(track: str) -> dict | None:
 
 # ─── NWS Weather ───────────────────────────────────────────────────────────────
 
+def _nws_points(lat: float, lon: float, headers: dict) -> dict | None:
+    """Hit the /points endpoint to get forecast URLs for a lat/lon."""
+    resp = requests.get(f"https://api.weather.gov/points/{lat},{lon}", timeout=10, headers=headers)
+    if resp.status_code != 200:
+        print(f"  NWS points lookup failed: {resp.status_code}")
+        return None
+    return resp.json().get('properties', {})
+
+
+def _avg_in_window(periods: list, target_date: date,
+                   start: time = RACE_WINDOW_START,
+                   end: time = RACE_WINDOW_END) -> dict | None:
+    """
+    Average hourly periods that fall within [start, end] local time on target_date.
+    NWS hourly periods are 1 hour long; startTime includes local TZ offset.
+    Returns aggregated dict or None if no hours matched.
+    """
+    matched = []
+    for p in periods:
+        try:
+            st = datetime.fromisoformat(p['startTime'])
+        except (KeyError, ValueError):
+            continue
+        # Use the local time from the ISO string (NWS provides TZ-aware timestamps)
+        local_date = st.date()
+        local_time = st.time()
+        if local_date != target_date:
+            continue
+        if start <= local_time < end:
+            matched.append(p)
+
+    if not matched:
+        return None
+
+    def _num(val, default=0):
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return default
+
+    precips = [
+        _num((p.get('probabilityOfPrecipitation') or {}).get('value'))
+        for p in matched
+    ]
+    temps = [_num(p.get('temperature')) for p in matched if p.get('temperature') is not None]
+
+    # Wind speed comes as string like "10 mph" or "5 to 10 mph" — pull max number.
+    def _max_wind(ws: str) -> float:
+        if not ws:
+            return 0.0
+        nums = re.findall(r'\d+', ws)
+        return max((float(n) for n in nums), default=0.0)
+
+    winds = [_max_wind(p.get('windSpeed', '')) for p in matched]
+
+    # Pick the midpoint period as the representative short forecast
+    mid = matched[len(matched) // 2]
+
+    return {
+        'precip_pct': int(round(max(precips) if precips else 0)),       # worst-case in window
+        'precip_pct_avg': int(round(sum(precips) / len(precips))) if precips else 0,
+        'temperature': f"{int(round(sum(temps) / len(temps)))}°{mid.get('temperatureUnit', 'F')}" if temps else 'Unknown',
+        'wind': f"{int(round(max(winds)))} mph" if winds else 'Unknown',
+        'forecast': mid.get('shortForecast', ''),
+        'hours_matched': len(matched),
+        'window': f"{start.strftime('%H:%M')}-{end.strftime('%H:%M')} local",
+    }
+
+
+def _daily_fallback(periods: list, target_date: date) -> dict | None:
+    """Original daily-period logic, used when hourly is unavailable."""
+    best_period = None
+    for period in periods:
+        try:
+            period_start = datetime.fromisoformat(period['startTime'].replace('Z', '+00:00'))
+        except (KeyError, ValueError):
+            continue
+        if period_start.date() == target_date:
+            if period['isDaytime'] or best_period is None:
+                best_period = period
+                if period['isDaytime']:
+                    break
+
+    if not best_period:
+        for period in periods:
+            try:
+                period_start = datetime.fromisoformat(period['startTime'].replace('Z', '+00:00'))
+            except (KeyError, ValueError):
+                continue
+            if period_start.date() >= target_date:
+                best_period = period
+                break
+
+    if not best_period:
+        return None
+
+    precip_pct = (best_period.get('probabilityOfPrecipitation') or {}).get('value') or 0
+    return {
+        'precip_pct': int(precip_pct),
+        'temperature': f"{best_period.get('temperature', '?')}°{best_period.get('temperatureUnit', 'F')}",
+        'wind': best_period.get('windSpeed', 'Unknown'),
+        'forecast': best_period.get('shortForecast', ''),
+        'detailed': best_period.get('detailedForecast', ''),
+        'period_name': best_period.get('name', ''),
+    }
+
+
 def get_nws_forecast(track: str, target_date: date = None) -> dict | None:
-    """Get weather forecast from NWS API for a track location."""
+    """
+    Get weather forecast from NWS API for a track location, averaged over the
+    race-time window (default 12 PM–5 PM local). Falls back to daily period
+    forecast if the hourly endpoint is unavailable.
+    """
     meta = TRACKS.get(track.lower())
     if not meta:
         print(f"  Unknown track: {track}")
@@ -151,65 +267,69 @@ def get_nws_forecast(track: str, target_date: date = None) -> dict | None:
         print(f"  NWS does not cover {track} (Canada). Skipping forecast.")
         return None
 
-    lat, lon = meta['lat'], meta['lon']
+    if target_date is None:
+        target_date = date.today()
+
+    headers = {'User-Agent': 'horse-handicapper-tool (personal use)'}
 
     try:
-        headers = {'User-Agent': 'horse-handicapper-tool (personal use)'}
-
-        resp = requests.get(f"https://api.weather.gov/points/{lat},{lon}", timeout=10, headers=headers)
-        if resp.status_code != 200:
-            print(f"  NWS points lookup failed: {resp.status_code}")
+        props = _nws_points(meta['lat'], meta['lon'], headers)
+        if not props:
             return None
 
-        forecast_url = resp.json()['properties']['forecast']
-        resp = requests.get(forecast_url, timeout=10, headers=headers)
-        if resp.status_code != 200:
-            print(f"  NWS forecast fetch failed: {resp.status_code}")
-            return None
+        hourly_url = props.get('forecastHourly')
+        daily_url  = props.get('forecast')
 
-        periods = resp.json()['properties']['periods']
+        used_fallback = False
+        agg = None
 
-        if target_date is None:
-            target_date = date.today()
+        # Try hourly + race-window average first
+        if hourly_url:
+            try:
+                resp = requests.get(hourly_url, timeout=10, headers=headers)
+                if resp.status_code == 200:
+                    periods = resp.json().get('properties', {}).get('periods', [])
+                    agg = _avg_in_window(periods, target_date)
+                    if agg is None:
+                        print(f"  NWS hourly: no hours matched {RACE_WINDOW_START.strftime('%H:%M')}–"
+                              f"{RACE_WINDOW_END.strftime('%H:%M')} on {target_date}")
+                else:
+                    print(f"  NWS hourly fetch failed: {resp.status_code}")
+            except Exception as e:
+                print(f"  NWS hourly error: {e}")
 
-        # Find the best matching period (prefer daytime)
-        best_period = None
-        for period in periods:
-            period_start = datetime.fromisoformat(period['startTime'].replace('Z', '+00:00'))
-            if period_start.date() == target_date:
-                if period['isDaytime'] or best_period is None:
-                    best_period = period
-                    if period['isDaytime']:
-                        break
+        # Fallback to daily period
+        if agg is None:
+            used_fallback = True
+            print(f"  ⚠ Falling back to daily-period forecast (less accurate for race-time estimates)")
+            if not daily_url:
+                print(f"  No daily forecast URL available")
+                return None
+            resp = requests.get(daily_url, timeout=10, headers=headers)
+            if resp.status_code != 200:
+                print(f"  NWS daily fetch failed: {resp.status_code}")
+                return None
+            periods = resp.json().get('properties', {}).get('periods', [])
+            agg = _daily_fallback(periods, target_date)
+            if agg is None:
+                print(f"  No forecast available for {target_date}")
+                return None
 
-        if not best_period:
-            for period in periods:
-                period_start = datetime.fromisoformat(period['startTime'].replace('Z', '+00:00'))
-                if period_start.date() >= target_date:
-                    best_period = period
-                    break
-
-        if not best_period:
-            print(f"  No forecast available for {target_date}")
-            return None
-
-        precip_pct = best_period.get('probabilityOfPrecipitation', {}).get('value', 0) or 0
-        wind_speed = best_period.get('windSpeed', 'Unknown')
-        temp = best_period.get('temperature', 'Unknown')
-        temp_unit = best_period.get('temperatureUnit', 'F')
-        short_forecast = best_period.get('shortForecast', '')
-        detailed = best_period.get('detailedForecast', '')
-
+        precip_pct = agg['precip_pct']
         return {
             'source': 'nws_forecast',
-            'dirt': estimate_dirt_condition(precip_pct, short_forecast, detailed),
-            'turf': estimate_turf_condition(precip_pct, short_forecast, detailed),
+            'dirt': estimate_dirt_condition(precip_pct),
+            'turf': estimate_turf_condition(precip_pct),
             'precip_pct': precip_pct,
-            'temperature': f"{temp}°{temp_unit}",
-            'wind': wind_speed,
-            'forecast': short_forecast,
-            'detailed': detailed,
-            'period_name': best_period.get('name', ''),
+            'precip_pct_avg': agg.get('precip_pct_avg'),
+            'temperature': agg['temperature'],
+            'wind': agg['wind'],
+            'forecast': agg['forecast'],
+            'detailed': agg.get('detailed', ''),
+            'period_name': agg.get('period_name', ''),
+            'hours_matched': agg.get('hours_matched'),
+            'window': agg.get('window'),
+            'daily_fallback': used_fallback,
             'target_date': str(target_date),
         }
 
@@ -218,31 +338,27 @@ def get_nws_forecast(track: str, target_date: date = None) -> dict | None:
         return None
 
 
-def estimate_dirt_condition(precip_pct: int, short: str, detailed: str) -> str:
-    text = (short + ' ' + detailed).lower()
-    heavy_rain = any(w in text for w in ['heavy rain', 'thunderstorm', 'downpour', 'flood'])
-    rain = any(w in text for w in ['rain', 'showers', 'drizzle', 'precipitation'])
+# Probability-first condition estimators. Text matching removed — the NWS
+# short-forecast string kept leaking overnight/far-off-window terms like
+# "thunderstorm" into what should have been a fair-track call.
 
-    if heavy_rain or precip_pct >= 80:
+def estimate_dirt_condition(precip_pct: int) -> str:
+    if precip_pct >= 80:
         return 'Sloppy (estimated)'
-    elif (rain and precip_pct >= 60) or precip_pct >= 70:
+    elif precip_pct >= 60:
         return 'Muddy (estimated)'
-    elif (rain and precip_pct >= 40) or precip_pct >= 50:
+    elif precip_pct >= 40:
         return 'Good (estimated)'
     else:
         return 'Fast (estimated)'
 
 
-def estimate_turf_condition(precip_pct: int, short: str, detailed: str) -> str:
-    text = (short + ' ' + detailed).lower()
-    heavy_rain = any(w in text for w in ['heavy rain', 'thunderstorm', 'downpour'])
-    rain = any(w in text for w in ['rain', 'showers', 'drizzle'])
-
-    if heavy_rain or precip_pct >= 80:
+def estimate_turf_condition(precip_pct: int) -> str:
+    if precip_pct >= 80:
         return 'Yielding (estimated) — turf races may come off'
-    elif (rain and precip_pct >= 60) or precip_pct >= 70:
+    elif precip_pct >= 60:
         return 'Soft (estimated)'
-    elif (rain and precip_pct >= 40) or precip_pct >= 50:
+    elif precip_pct >= 40:
         return 'Good (estimated)'
     else:
         return 'Firm (estimated)'
@@ -261,8 +377,15 @@ def build_prompt_text(info: dict, track: str) -> str:
 
     if info['source'] == 'nws_forecast':
         lines.append(f"  Weather: {info.get('forecast', 'Unknown')}")
-        lines.append(f"  Precip chance: {info.get('precip_pct', '?')}%")
+        precip_line = f"  Precip chance: {info.get('precip_pct', '?')}%"
+        if info.get('precip_pct_avg') is not None and info.get('precip_pct_avg') != info.get('precip_pct'):
+            precip_line += f" (avg {info['precip_pct_avg']}%)"
+        lines.append(precip_line)
         lines.append(f"  Temp: {info.get('temperature', '?')}, Wind: {info.get('wind', '?')}")
+        if info.get('window') and not info.get('daily_fallback'):
+            lines.append(f"  Window: {info['window']} ({info.get('hours_matched', '?')} hours)")
+        if info.get('daily_fallback'):
+            lines.append(f"  (⚠ daily-period fallback — hourly unavailable)")
 
         precip = info.get('precip_pct', 0)
         if precip >= 60:

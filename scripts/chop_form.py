@@ -32,16 +32,24 @@ OUT_BASE  = SCRIPT_DIR / ".." / "data" / "chopped_forms"
 # ── helpers ──────────────────────────────────────────────────────────
 
 def get_page_race(page) -> int | None:
-    """Extract race number from a page's footer line (text-only sniff)."""
+    """Extract race number from a page's header/footer line (text-only sniff)."""
     text = page.get_text()
-    # "GP, race 3, page:6"  or  "GP, race: 1, page:1"  or  "SA, race 1, page:1"
+    # DRF/1ST style: "GP, race 3, page:6"  or  "GP, race: 1, page:1"
     m = re.search(r', race:?\s*(\d+), page:\d+', text)
     if m:
         return int(m.group(1))
-    # "04/04/2026 Race 5"
+    # Equibase style: "04/04/2026 Race 5"
     m = re.search(r'\d{2}/\d{2}/\d{4}\s+Race\s+(\d+)', text)
     if m:
         return int(m.group(1))
+    # Brisnet style: header has a standalone line "Race N" (PyMuPDF emits the
+    # top-right header tag as its own block, separate from the rest of the
+    # banner). The body text never contains "Race N" as a standalone line —
+    # it appears as "Races 1-2-3", "Such A Race Since Then", etc.
+    if "Ultimate PP" in text or "brisnet" in text.lower():
+        m = re.search(r'(?m)^Race\s+(\d+)\s*$', text)
+        if m:
+            return int(m.group(1))
     return None
 
 
@@ -49,7 +57,7 @@ def detect_track(text: str, filename: str) -> str:
     """Best-effort track detection from filename or content."""
     fn = filename.lower()
     mapping = {
-        'kee': 'keeneland', 'cd': 'churchill', 'sar': 'saratoga',
+        'kee': 'keeneland', 'cd': 'churchill-downs', 'sar': 'saratoga',
         'gp': 'gulfstream-park', 'sa': 'santa-anita', 'aq': 'aqueduct',
         'op': 'oaklawn', 'tam': 'tampa', 'fg': 'fair-grounds',
         'dmr': 'del-mar', 'pim': 'pimlico', 'lrl': 'laurel',
@@ -96,11 +104,13 @@ def main():
         if not pdf_path.exists():
             pdf_path = Path(args.pdf)
     else:
-        pdfs = sorted(FORMS_DIR.glob("*.pdf"))
+        pdfs = list(FORMS_DIR.glob("*.pdf"))
         if not pdfs:
             print(f"No PDFs in {FORMS_DIR}")
             return
-        pdf_path = pdfs[-1]
+        # Pick most recently modified — "the one Blake just downloaded"
+        # rather than whatever sorts last alphabetically.
+        pdf_path = max(pdfs, key=lambda p: p.stat().st_mtime)
         print(f"Auto-selected: {pdf_path.name}")
 
     if not pdf_path.exists():

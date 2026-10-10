@@ -32,7 +32,7 @@ DATA_PATH = Path(os.environ['DATA_PATH'])
 
 _TRACK_ALIASES = {
     'gulfstream-park': 'gulfstream-park', 'gulfstream park': 'gulfstream-park', 'gulfstream': 'gulfstream-park',
-    'churchill-downs': 'churchill', 'churchill downs': 'churchill',
+    'churchill-downs': 'churchill-downs', 'churchill downs': 'churchill-downs', 'churchill': 'churchill-downs',
     'santa-anita': 'santa-anita', 'santa anita': 'santa-anita',
     'del-mar': 'del-mar', 'del mar': 'del-mar',
     'fair-grounds': 'fair-grounds', 'fair grounds': 'fair-grounds',
@@ -60,6 +60,101 @@ def _parse_ml_odds(odds_str):
         return 1 / (val + 1) if val >= 1 else val
     except (ValueError, ZeroDivisionError):
         return np.nan
+
+
+# ============================================================================
+# Exotics meta loading (for exacta box grading)
+# ============================================================================
+# Mirrors the structure used by backtest_kfold.py so behavior is consistent.
+# Meta CSVs live at {DATA_PATH}/meta/{track}_{date}.csv with columns including
+# exacta_finish ("3-2") and exacta_$2_payout ("$53.26"). Cached per (track,
+# date) so repeated lookups within one day's summary don't re-read the file.
+
+META_DIR = DATA_PATH / 'meta'
+_META_CACHE = {}
+
+# Reverse aliases: when the meta file may be saved under a different track
+# slug than what daily_summary normalized to. Mirrors backtest_kfold.
+_META_REVERSE_ALIASES = {
+    'gulfstream-park': ['gulfstream', 'gulfstream park'],
+    'gulfstream': ['gulfstream-park', 'gulfstream park'],
+    'tampa': ['tampa-bay', 'tampa-bay-downs', 'tampa bay downs'],
+    'oaklawn': ['oaklawn-park', 'oaklawn park'],
+    'laurel': ['laurel-park', 'laurel park'],
+    'belmont': ['belmont-park', 'belmont park'],
+}
+
+
+def _meta_path_candidates(track, date):
+    paths = [META_DIR / f'{track}_{date}.csv']
+    for variant in _META_REVERSE_ALIASES.get(track, []):
+        paths.append(META_DIR / f'{variant}_{date}.csv')
+    return paths
+
+
+def _parse_exacta_payout(val):
+    """Parse '$53.26' → 53.26. Empty/NA → 0.0."""
+    if pd.isna(val):
+        return 0.0
+    s = str(val).strip().replace('$', '').replace(',', '')
+    if s == '' or s.lower() in ('nan', 'none', '-'):
+        return 0.0
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
+def _parse_exacta_finish(val):
+    """Parse '3-2' → (3, 2). Empty/NA → None."""
+    if pd.isna(val) or str(val).strip() == '':
+        return None
+    try:
+        return tuple(int(x) for x in str(val).strip().split('-'))
+    except (ValueError, TypeError):
+        return None
+
+
+def load_race_exacta(track, date_str, race):
+    """
+    Look up exacta finish + payout for one race. Returns:
+        {'exacta_finish': (h1, h2), 'exacta_payout': float}  on success
+        {'_status': 'no_meta_file'} if no meta CSV anywhere
+        {'_status': 'no_race_row'}  if meta exists but race missing
+        {'_status': 'no_exacta'}    if race exists but no exacta data
+
+    The caller can use _status to attribute "skipped" reasons in the
+    summary, the same way backtest_kfold does.
+    """
+    cache_key = (track, date_str)
+    if cache_key not in _META_CACHE:
+        loaded = None
+        for path in _meta_path_candidates(track, date_str):
+            if path.exists():
+                try:
+                    loaded = pd.read_csv(path)
+                    break
+                except Exception:
+                    continue  # try next alias
+        _META_CACHE[cache_key] = loaded
+
+    meta = _META_CACHE[cache_key]
+    if meta is None:
+        return {'_status': 'no_meta_file'}
+
+    row = meta[meta['race'] == race]
+    if row.empty:
+        return {'_status': 'no_race_row'}
+
+    r = row.iloc[0]
+    finish = _parse_exacta_finish(r.get('exacta_finish'))
+    if finish is None:
+        return {'_status': 'no_exacta'}
+
+    return {
+        'exacta_finish': finish,
+        'exacta_payout': _parse_exacta_payout(r.get('exacta_$2_payout')),
+    }
 
 
 def load_results(date_str, track):
@@ -398,6 +493,105 @@ def run_summary(date_str, track, bankroll=None):
             out(f"\n  Exotic bets:")
             for _, bet in exotic_bets.iterrows():
                 out(f"    R{int(bet['race'])} {bet['bet_type']:<10s} #{bet['horse_number']}")
+
+        # ── Exacta box grading ───────────────────────────────────────────
+        # Derive exacta boxes from the bet_log using the same trigger
+        # rules predict_v3 uses for its exacta box recommendations:
+        #   * race must have 2 or 3 horses bet with triggered_by == 'RDG'
+        #   * no LOG fire anywhere in the race (LOG races already get W
+        #     coverage, and the v3 backtest pool was RDG_only)
+        # Cost: $4 for 2-horse box, $12 for 3-horse box.
+        # Hit: actual top-2 finishers must both be in our boxed horses.
+        # Payout: read from {DATA_PATH}/meta/{track}_{date}.csv.
+        if 'triggered_by' in bet_df.columns:
+            exacta_boxes = []
+            for race_num, race_df in bet_df.groupby('race'):
+                # Any LOG fire disqualifies the entire race per v3 rules
+                has_log = race_df['triggered_by'].fillna('').str.contains(
+                    'LOG').any()
+                if has_log:
+                    continue
+                rdg_only = race_df[race_df['triggered_by'] == 'RDG']
+                n_h = len(rdg_only)
+                if n_h not in (2, 3):
+                    continue
+                horses = sorted(int(h) for h in rdg_only['horse_number'])
+                exacta_boxes.append({
+                    'race': int(race_num),
+                    'horses': horses,
+                    'n_horses': n_h,
+                    'cost': 4 if n_h == 2 else 12,
+                })
+
+            if exacta_boxes:
+                out(f"\n  Exacta boxes (derived from RDG-only multi-trigger races):")
+                box_wagered = 0.0
+                box_returned = 0.0
+                box_hits = 0
+
+                # Track miss reasons so we know what data is needed
+                misses_no_meta = 0
+                misses_no_race = 0
+                misses_no_exacta = 0
+
+                for box in exacta_boxes:
+                    race_num = box['race']
+                    horses = box['horses']
+                    cost = box['cost']
+                    box_str = '/'.join(str(h) for h in horses)
+
+                    exacta_info = load_race_exacta(track, date_str, race_num)
+                    status = exacta_info.get('_status') if isinstance(
+                        exacta_info, dict) and '_status' in exacta_info else None
+
+                    if status == 'no_meta_file':
+                        out(f"    R{race_num} {box_str:<10s} ${cost:>2}: "
+                            f"no meta CSV (download_results / backfill needed)")
+                        misses_no_meta += 1
+                        continue
+                    if status == 'no_race_row':
+                        out(f"    R{race_num} {box_str:<10s} ${cost:>2}: "
+                            f"meta exists but race row missing")
+                        misses_no_race += 1
+                        continue
+                    if status == 'no_exacta':
+                        out(f"    R{race_num} {box_str:<10s} ${cost:>2}: "
+                            f"no exacta data on this race")
+                        misses_no_exacta += 1
+                        continue
+
+                    actual_top2 = set(exacta_info['exacta_finish'][:2])
+                    payout = exacta_info['exacta_payout']
+                    hit = actual_top2.issubset(set(horses))
+                    fin_str = '-'.join(
+                        str(h) for h in exacta_info['exacta_finish'])
+
+                    box_wagered += cost
+                    if hit:
+                        box_returned += payout
+                        box_hits += 1
+                        marker = " ✓"
+                        result_str = f"hit {fin_str} → ${payout:.2f}"
+                    else:
+                        marker = ""
+                        result_str = f"missed (actual {fin_str})"
+
+                    out(f"    R{race_num} {box_str:<10s} ${cost:>2}: "
+                        f"{result_str}{marker}")
+
+                # Roll into the day's totals so P&L includes boxes
+                total_wagered += box_wagered
+                total_returned += box_returned
+
+                box_pnl = box_returned - box_wagered
+                box_roi = (box_pnl / box_wagered * 100
+                           if box_wagered > 0 else 0)
+                evaluable = sum(1 for b in exacta_boxes) - (
+                    misses_no_meta + misses_no_race + misses_no_exacta)
+                out(f"    ── Exacta subtotal: {box_hits}/{evaluable} hits "
+                    f"on ${box_wagered:.0f} wagered, "
+                    f"${box_returned:.2f} returned "
+                    f"(P&L ${box_pnl:+.2f}, ROI {box_roi:+.1f}%)")
 
         # Summary
         pnl = total_returned - total_wagered

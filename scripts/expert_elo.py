@@ -50,7 +50,12 @@ EXPERT_INITIAL_RATINGS = {
     'joe_kristufek':    1700,
     'mike_beer':        1700,
     'mike_somich':      1700,
+    'marcus_hersh':     1700,  
     'david_aragona':    1650,
+    'jackson_muniz':    1625,
+    'aaron_halterman': 1625,
+    'john_ennis':       1625,
+    'ed_sehon':         1600,
     ## generic expert with good credentials
     'scott_hazelton':   1575,
     'jeremy_plonk':     1575,
@@ -60,21 +65,35 @@ EXPERT_INITIAL_RATINGS = {
     'kim_nelson':       1575,
     'roberto_rodriguez':1575,
     'tony_calo':        1575,
-    'kaitlin_benson':   1575,
+    'matthew_desantis': 1575,
+    'trd':              1575,
+    'at_the_races': 1575,
+    'nick_greathouse': 1575,
+    'ashley_mailloux': 1575,
+    'eric_decoster': 1575,
+    'ryan_anderson': 1575,
+    'paddock_prince': 1575,
+    'fbg': 1575,
     ## ron seemed more useful between two gulfstream experts
     'ron_nicoletti':    1600,
     'brian_nadeau':     1550,
+    ## drf seems auto generated, don't really trust
+    'kenny_peck': 1525,
+    'michael_hammersly': 1525,
+    'sweep': 1525,
+
     ## media people intialized as average
     'kyle_hampton':     1500,
     'kevin_kilroy':     1500,
+    'kaitlin_benson':   1500,
     'samantha_perry':   1500,
-    'ed_derosa':        1450,
+    'ed_derosa':        1450
 }
 
 # ── Track aliases ───────────────────────────────────────────────────
 _TRACK_ALIASES = {
     'gulfstream-park': 'gulfstream-park', 'gulfstream park': 'gulfstream-park', 'gulfstream': 'gulfstream-park',
-    'churchill-downs': 'churchill', 'churchill downs': 'churchill',
+    'churchill-downs': 'churchill-downs', 'churchill downs': 'churchill-downs', 'churchill': 'churchill-downs',
     'santa-anita': 'santa-anita', 'santa anita': 'santa-anita',
     'del-mar': 'del-mar', 'del mar': 'del-mar',
     'fair-grounds': 'fair-grounds', 'fair grounds': 'fair-grounds',

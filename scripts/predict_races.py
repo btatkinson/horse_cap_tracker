@@ -32,6 +32,9 @@ DATA_PATH = Path(os.environ['DATA_PATH'])
 
 
 # ── Defaults (overridden by fitted_params.json if present) ──────────
+DEFAULT_STD = 5.0
+DEFAULT_DF = 1.0
+DEFAULT_WEIGHTS = {'claude': 0.35, 'gemini': 0.30, 'ml': 0.35}
 
 # Minimum edge (probability units) to consider a bet
 MIN_EDGE = 0.065
@@ -69,7 +72,7 @@ def load_ai_picks(date_str, track):
 
     frames = {}
     for csv_path in picks_dir.glob('*.csv'):
-        name = csv_path.stem  # 'claude', 'gemini', etc.
+        name = csv_path.stem  # 'claude', 'gemini', 'openai'
         if name in ('predictions', 'bet_log', 'backtest_results'):
             continue
         df = pd.read_csv(csv_path)
@@ -79,6 +82,8 @@ def load_ai_picks(date_str, track):
             cl = c.lower().strip()
             if 'beyer' in cl:
                 col_map[c] = f'{name}_beyer'
+            elif 'closing' in cl:
+                col_map[c] = f'{name}_closing_prob'
             elif 'win_prob' in cl or 'prob' in cl:
                 col_map[c] = f'{name}_win_prob'
         df = df.rename(columns=col_map)
@@ -87,7 +92,7 @@ def load_ai_picks(date_str, track):
         df['horse_number'] = pd.to_numeric(df['horse_number'], errors='coerce').astype('Int64')
 
         keep = ['race', 'horse_number']
-        for col in [f'{name}_beyer', f'{name}_win_prob']:
+        for col in [f'{name}_beyer', f'{name}_win_prob', f'{name}_closing_prob']:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
                 keep.append(col)
@@ -626,7 +631,7 @@ def percentage_to_american_odds(p):
 # 6. MAIN PIPELINE
 # =============================================================================
 
-def run_predictions(date_str, track, num_sims=100000):
+def run_predictions(date_str, track, num_sims=100000, use_regression=False):
     """Full forward-looking prediction pipeline."""
 
     # --- Load fitted params ---
@@ -701,13 +706,16 @@ def run_predictions(date_str, track, num_sims=100000):
     else:
         print(f"  No upc_entries/{track}.csv found — running without ML odds")
 
-    # --- Build ensemble ---
-    print(f"\nBuilding ensemble (sims={num_sims:,})...")
-    df = build_ensemble(df, std_dev, degrees_of_freedom, num_sims, weights,
-                        ml_regularization=ml_reg)
-
-    # --- Apply expert adjustments ---
-    df = apply_expert_adjustments(df, date_str, track)
+    # --- Build probabilities ---
+    if use_regression:
+        print(f"\nBuilding regression probabilities...")
+        df = build_regression_probs(df, date_str, track)
+    else:
+        print(f"\nBuilding ensemble (sims={num_sims:,})...")
+        df = build_ensemble(df, std_dev, degrees_of_freedom, num_sims, weights,
+                            ml_regularization=ml_reg)
+        # Apply expert adjustments (only in ensemble mode — regression includes them)
+        df = apply_expert_adjustments(df, date_str, track)
 
     # --- Edge calculation ---
     df = calculate_edges(df)
@@ -756,6 +764,193 @@ def run_predictions(date_str, track, num_sims=100000):
 
     return df, bet_df
 
+def build_regression_probs(df, date_str, track):
+    """
+    Build probability estimates using the fitted regression model
+    (from regression_analysis.py). Uses averaged K-fold logistic
+    regression coefficients applied to: ML, Claude Prob, Gemini Prob,
+    Claude Beyer, Gemini Beyer, Human Pool.
+
+    Returns df with 'ensemble_prob' column populated.
+    """
+    import json
+
+    model_path = DATA_PATH / 'regression_model.json'
+    if not model_path.exists():
+        print(f"  No regression_model.json found — run regression_analysis.py first")
+        return df
+
+    with open(model_path) as f:
+        model = json.load(f)
+
+    feature_cols = model['feature_cols']
+    coefs = np.array(model['coefficients'])
+    intercept = model['intercept']
+
+    print(f"  Regression model: {model['n_folds']}-fold avg, "
+          f"CV ρ={model['cv_spearman']:.4f}")
+
+    # Build features that the regression expects
+    df = df.copy()
+
+    # ML prob norm should already exist
+    # Claude/Gemini prob and beyer should already be loaded
+
+    # Build human pool
+    df['human_pool'] = 0.0
+    expert_dir = DATA_PATH / 'expert_picks' / date_str / track
+
+    ratings_path = DATA_PATH / 'expert_ratings.json'
+    ratings = {}
+    if ratings_path.exists():
+        with open(ratings_path) as f_r:
+            ratings = json.load(f_r)
+
+    if expert_dir.exists():
+        for csv_path in expert_dir.glob('*.csv'):
+            expert_name = csv_path.stem
+            try:
+                edf = pd.read_csv(csv_path)
+            except Exception:
+                continue
+            if edf.empty:
+                continue
+
+            elo = ratings.get(expert_name, {}).get('rating', 1500)
+            elo_mult = max(0.1, (elo - 1350) / 150)
+
+            for _, row in edf.iterrows():
+                race = int(row['race'])
+                hn = int(row['horse_number'])
+                delta = float(row['logit_delta'])
+                pool_amount = (delta / 0.7) * 2.0 * elo_mult
+
+                mask = (df['race'] == race) & (df['horse_number'] == hn)
+                df.loc[mask, 'human_pool'] += pool_amount
+
+            print(f"    Expert: {expert_name} (elo={elo:.0f}, mult={elo_mult:.2f})")
+
+    # Normalize human pool to probability per race
+    df['human_prob'] = 0.0
+    for _, race_df in df.groupby('race'):
+        idx = race_df.index
+        pool = df.loc[idx, 'human_pool'].values
+        shifted = pool - pool.min() + 0.01
+        total = shifted.sum()
+        if total > 0:
+            df.loc[idx, 'human_prob'] = shifted / total
+
+    # Map regression feature names to df columns
+    col_map = {
+        'ml_prob_norm': 'ml_win_prob_norm',
+        'claude_prob': 'claude_win_prob',
+        'gemini_prob': 'gemini_win_prob',
+        'openai_prob': 'openai_win_prob',
+        'claude_beyer_sim': 'claude_beyer_sim',
+        'gemini_beyer_sim': 'gemini_beyer_sim',
+        'openai_beyer_sim': 'openai_beyer_sim',
+        'openai_closing': 'openai_closing_prob',
+        'claude_closing': 'claude_closing_prob',
+        'gemini_closing': 'gemini_closing_prob',
+        'human_prob': 'human_prob',
+        'inv_field_size': 'inv_field_size',
+        'ml_x_fieldsize': 'ml_x_fieldsize',
+    }
+
+    # Convert beyers to within-race softmax probabilities
+    for beyer_col, sim_col in [('claude_beyer', 'claude_beyer_sim'),
+                                ('gemini_beyer', 'gemini_beyer_sim'),
+                                ('openai_beyer', 'openai_beyer_sim')]:
+        df[sim_col] = np.nan
+        if beyer_col in df.columns:
+            for _, race_df in df.groupby('race'):
+                idx = race_df.index
+                vals = df.loc[idx, beyer_col].values
+                valid = ~np.isnan(vals)
+                if valid.sum() >= 2:
+                    centered = vals[valid] - np.mean(vals[valid])
+                    exp_vals = np.exp(centered * 0.1)
+                    probs = exp_vals / exp_vals.sum()
+                    full = np.full(len(vals), np.nan)
+                    full[valid] = probs
+                    df.loc[idx, sim_col] = full
+
+    # Compute inv_field_size and interaction features
+    df['inv_field_size'] = np.nan
+    for _, race_df in df.groupby('race'):
+        idx = race_df.index
+        df.loc[idx, 'inv_field_size'] = 1.0 / len(race_df)
+
+    # ML × 1/field_size interaction
+    clip_lo_fs, clip_hi_fs = 1e-4, 1 - 1e-4
+    if 'ml_win_prob_norm' in df.columns:
+        ml_logit = np.log(
+            df['ml_win_prob_norm'].clip(clip_lo_fs, clip_hi_fs) /
+            (1 - df['ml_win_prob_norm'].clip(clip_lo_fs, clip_hi_fs))
+        )
+        df['ml_x_fieldsize'] = ml_logit * df['inv_field_size']
+
+    # Normalize probability features per race (skip non-prob features)
+    feature_is_prob = model.get('feature_is_prob',
+                                [True] * len(feature_cols))  # default all prob
+
+    for fc, is_prob in zip(feature_cols, feature_is_prob):
+        if not is_prob:
+            continue
+        df_col = col_map.get(fc, fc)
+        if df_col in df.columns:
+            for _, race_df in df.groupby('race'):
+                idx = race_df.index
+                vals = df.loc[idx, df_col].values
+                valid = ~np.isnan(vals)
+                if valid.any() and np.nansum(vals[valid]) > 0:
+                    df.loc[idx, df_col] = np.where(valid, vals / np.nansum(vals), np.nan)
+
+    # Build feature matrix
+    X_cols = []
+    for fc in feature_cols:
+        df_col = col_map.get(fc, fc)
+        if df_col in df.columns:
+            X_cols.append(df_col)
+        else:
+            print(f"    WARNING: feature '{fc}' ({df_col}) not found, using 0")
+            df[df_col] = 0
+            X_cols.append(df_col)
+
+    # Transform: prob features → logit, raw features stay raw
+    input_space = model.get('input_space', 'raw')
+    clip_lo, clip_hi = 1e-4, 1 - 1e-4
+
+    X_raw = df[X_cols].fillna(0).values
+
+    if input_space == 'mixed':
+        X = np.zeros_like(X_raw)
+        for i, is_prob in enumerate(feature_is_prob):
+            if is_prob:
+                clipped = np.clip(X_raw[:, i], clip_lo, clip_hi)
+                X[:, i] = np.log(clipped / (1 - clipped))
+            else:
+                X[:, i] = X_raw[:, i]
+    elif input_space == 'logit':
+        X_clipped = np.clip(X_raw, clip_lo, clip_hi)
+        X = np.log(X_clipped / (1 - X_clipped))
+    else:
+        X = X_raw
+
+    # Apply logistic regression: P(win) = sigmoid(X @ coefs + intercept)
+    logits = X @ coefs + intercept
+    raw_probs = 1.0 / (1.0 + np.exp(-logits))
+    df['ensemble_prob'] = raw_probs
+
+    # Normalize per race
+    for _, race_df in df.groupby('race'):
+        idx = race_df.index
+        total = df.loc[idx, 'ensemble_prob'].sum()
+        if total > 0:
+            df.loc[idx, 'ensemble_prob'] /= total
+
+    return df
+
 
 # =============================================================================
 # MAIN
@@ -770,7 +965,10 @@ if __name__ == '__main__':
                         help='Min EV ROI to bet (default 0 = any positive EV)')
     parser.add_argument('--takeout', type=float, default=WIN_TAKEOUT,
                         help='Win pool takeout rate (default 0.17)')
+    parser.add_argument('--regression', action='store_true',
+                        help='Use regression model instead of ensemble')
     args = parser.parse_args()
 
     WIN_TAKEOUT = args.takeout
-    run_predictions(args.date, args.track, num_sims=args.sims)
+    run_predictions(args.date, args.track, num_sims=args.sims,
+                    use_regression=args.regression)

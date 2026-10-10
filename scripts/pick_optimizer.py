@@ -1,26 +1,36 @@
 """
 pick_optimizer.py
 
-Optimize Pick 3/4/5/6 tickets using Pareto frontier over model probabilities.
+Optimize Pick 3/4/5/6 tickets using Pareto frontier over a composite
+logistic + ridge heuristic.
 
 Reads predictions.csv output from predict_races.py — avoids re-running
 the probability engine.
 
+Heuristic per horse (within each race):
+    logistic_share = ensemble_prob / sum(ensemble_prob)
+    ridge_share    = max($0.50, ridge_value) / sum(max($0.50, ridge_value))
+    score_i        = alpha * logistic_share + (1-alpha) * ridge_share
+
+Both shares sum to 1 within a race, so alpha is an honest 50/50 knob
+and the composite stays on [0, 1]. Ridge values are floored at $0.50
+to keep the signal positive without fully masking negative predictions.
+
+Ticket score = sum of selected horse scores across all races.
+Ticket cost  = product of selection counts per race.
+
+Frontier maximizes ticket score subject to cost. Tickets that increase
+cost without increasing composite score are pruned. Hit probability is
+still reported (from ensemble_prob) as a sanity-check metric, not as
+the optimization target.
+
 Usage:
     python pick_optimizer.py --date 2026-04-08 --track keeneland --races 1-5
-    python pick_optimizer.py --date 2026-04-08 --track keeneland --races 7-9 --pool 50000
-    python pick_optimizer.py --date 2026-04-08 --track keeneland --races 3-8 --max-cost 500
+    python pick_optimizer.py --date 2026-04-08 --track keeneland --races 7-9 \
+        --alpha 0.3 --max-cost 500
 
 Reads from:
     {DATA_PATH}/predictions/{date}/{track}/predictions.csv
-
-Arguments:
-    --races     Race range, e.g. "1-5" or "3,4,5,6,7"
-    --pool      Estimated pool size ($)
-    --takeout   Track takeout rate (default 0.22)
-    --max-cost  Max ticket cost in combos ($1 base)
-    --blend     Model vs ML blend (1.0 = all model, 0.5 = 50/50)
-    --top-n     Number of frontier tickets to show
 """
 
 import os, argparse, warnings
@@ -64,170 +74,199 @@ def parse_race_range(race_str):
 
 
 # =============================================================================
-# 2. TICKET OPTIMIZER (Pareto frontier)
+# 2. COMPOSITE SCORE
 # =============================================================================
 
-def optimize_pick_tickets(df, race_numbers, blend_factor=0.5,
-                          pool_size=100000, takeout_rate=0.22,
-                          max_cost=None, min_prob=None, min_total_prob=None,
-                          budget_steps=20,
-                          prob_col='ensemble_prob', ml_prob_col='ml_win_prob_norm'):
+def build_composite_score(df, alpha=0.5, prob_col='ensemble_prob',
+                          ridge_col='ridge_value'):
     """
-    Optimize Pick N tickets using model probabilities blended with ML.
+    Build composite score per horse, normalized within each race.
 
-    Uses Pareto frontier: for each cost level, find the selection with
-    highest EV. EV = (our_prob / market_prob) * net_pool - cost.
+    Both signals are converted to within-race shares (sum to 1 per race),
+    then blended:
 
-    Parameters
-    ----------
-    df : DataFrame with race data (from predictions.csv)
-    race_numbers : list of race numbers (e.g. [1,2,3,4,5])
-    blend_factor : weight on model (1.0 = all model, 0.0 = all ML)
-    pool_size : estimated pool size in dollars
-    takeout_rate : track takeout (default 0.22)
-    max_cost : max ticket cost in combinations
-    min_prob : min blended coverage per race (e.g. 0.7 = 70%)
-    min_total_prob : min total hit probability
-    budget_steps : number of frontier points to return
+        logistic share = ensemble_prob         (already sums to 1 per race)
+        ridge share    = max($0.50, ridge_value) / sum(max($0.50, ridge_value))
+        score          = alpha * logistic_share + (1-alpha) * ridge_share
 
-    Returns
-    -------
-    list of (cost, ev, probability, selections_dict)
+    Flooring ridge at $0.50 keeps the signal positive without masking
+    negatives entirely — a horse the model slightly hates contributes
+    little, but not nothing. The floor also prevents div-by-zero in
+    degenerate races. Alpha is an honest mixing weight (alpha=0.5 =
+    equal footing).
+
+    If a race has no ridge signal at all, falls back to pure logistic
+    share for that race.
     """
-    bet_type = len(race_numbers)
+    df = df.copy()
+
+    has_ridge = ridge_col in df.columns and df[ridge_col].notna().any()
+
+    df['logistic_share'] = np.nan
+    df['ridge_share'] = np.nan
+    df['composite_score'] = np.nan
+
+    for race_num, race_df in df.groupby('race'):
+        idx = race_df.index
+
+        # Logistic share — renormalize per race in case ensemble_prob drifted
+        probs = race_df[prob_col].values
+        valid = ~np.isnan(probs)
+        if valid.any() and np.nansum(probs) > 0:
+            df.loc[idx, 'logistic_share'] = np.where(
+                valid, probs / np.nansum(probs), np.nan
+            )
+
+        # Ridge share — apply a small positive floor (to avoid zeros /
+        # div-by-zero in degenerate races), then normalize. No clipping of
+        # negatives: in practice ridge values are almost always positive
+        # because the intercept is positive and every horse has some
+        # positive pull through its win-prob features. On the rare
+        # occasion ridge predicts slightly negative, the floor treats it
+        # as near-zero value without masking the signal entirely.
+        RIDGE_FLOOR = 0.5
+        race_has_ridge = False
+        if has_ridge:
+            rv = race_df[ridge_col].values.astype(float)
+            floored = np.where(np.isnan(rv), RIDGE_FLOOR,
+                               np.maximum(rv, RIDGE_FLOOR))
+            total = floored.sum()
+            if total > 0:
+                df.loc[idx, 'ridge_share'] = floored / total
+                race_has_ridge = True
+
+        # Composite: blend if ridge present for this race, else logistic only
+        ls = df.loc[idx, 'logistic_share'].fillna(0).values
+        if race_has_ridge:
+            rs = df.loc[idx, 'ridge_share'].fillna(0).values
+            composite = alpha * ls + (1 - alpha) * rs
+        else:
+            composite = ls
+        df.loc[idx, 'composite_score'] = composite
+
+    return df
+
+
+# =============================================================================
+# 3. TICKET OPTIMIZER (Pareto frontier on composite score)
+# =============================================================================
+
+def optimize_pick_tickets(df, race_numbers, alpha=0.5,
+                          max_cost=None, min_score=None,
+                          budget_steps=250):
+    """
+    Optimize Pick N tickets by maximizing composite heuristic at each cost.
+
+    Ticket score = sum of composite_score across all selected horses.
+    Ticket cost  = product of selection counts per race.
+
+    For each allocation (n_1, n_2, ..., n_K):
+      - Take the top n_i composite-scoring horses in race i
+      - Sum their composite scores
+      - Multiply the n_i's to get cost
+
+    Pareto frontier: for each cost level, keep the highest-scoring ticket,
+    then prune tickets that raise cost without raising score.
+
+    Reports ensemble_prob-based hit rate as a secondary metric (not the
+    optimization target).
+    """
     df_pick = df[df['race'].isin(race_numbers)].copy()
 
-    # Check for ML probs
-    has_ml = (ml_prob_col in df_pick.columns and df_pick[ml_prob_col].notna().any())
+    if 'composite_score' not in df_pick.columns:
+        raise RuntimeError("build_composite_score() must be called first")
 
-    if not has_ml:
-        blend_factor = 1.0
-        ml_prob_col_used = prob_col
-        print("No ML odds available. Using model probs only (no overlay detection).")
-    else:
-        ml_prob_col_used = ml_prob_col
-
-    # Blended probabilities
-    df_pick['blended_prob'] = (blend_factor * df_pick[prob_col] +
-                               (1 - blend_factor) * df_pick[ml_prob_col_used])
-
-    # Normalize within each race
-    for race_num in race_numbers:
-        mask = df_pick['race'] == race_num
-        total = df_pick.loc[mask, 'blended_prob'].sum()
-        if total > 0:
-            df_pick.loc[mask, 'blended_prob'] /= total
-
-    # Build sorted horse lists per race
+    # Sort horses within each race by composite score (descending)
     races = sorted(race_numbers)
-    blended_probs = {}
-    market_probs = {}
-    sorted_horses = {}
-
+    sorted_horses = {}       # race_num -> [(horse_number, score, ensemble_prob), ...]
     for race_num in races:
-        rkey = f"Race {race_num}"
         race_data = df_pick[df_pick['race'] == race_num]
+        race_data = race_data.dropna(subset=['composite_score'])
+        if race_data.empty:
+            continue
+        triples = list(zip(
+            race_data['horse_number'],
+            race_data['composite_score'],
+            race_data.get('ensemble_prob', pd.Series([np.nan] * len(race_data))),
+        ))
+        triples.sort(key=itemgetter(1), reverse=True)
+        sorted_horses[race_num] = triples
 
-        blended_probs[rkey] = dict(zip(race_data['horse_number'], race_data['blended_prob']))
-        market_probs[rkey] = dict(zip(race_data['horse_number'], race_data[ml_prob_col_used]))
-        sorted_horses[rkey] = sorted(blended_probs[rkey].items(),
-                                      key=itemgetter(1), reverse=True)
+    active_races = [r for r in races if r in sorted_horses]
+    if len(active_races) < 2:
+        return []
 
-    # Min selections per race
-    min_selection = [1] * bet_type
-    if min_prob is not None:
-        for i, race in enumerate(sorted(blended_probs.keys())):
-            cum = 0
-            count = 0
-            for _, prob in sorted_horses[race]:
-                cum += prob
-                count += 1
-                if cum >= min_prob:
-                    break
-            min_selection[i] = max(1, count)
+    max_horses = [len(sorted_horses[r]) for r in active_races]
+    min_selection = [1] * len(active_races)
 
-    max_horses = [len(sorted_horses[r]) for r in sorted(blended_probs.keys())]
-
-    # Generate all allocations
+    # Enumerate all allocations
     all_allocations = []
+
+    def distribute(current, rem, idx=0):
+        if idx == len(current) - 1:
+            if current[idx] + rem <= max_horses[idx]:
+                alloc = current.copy()
+                alloc[idx] += rem
+                all_allocations.append(alloc)
+            return
+        for i in range(rem + 1):
+            if current[idx] + i <= max_horses[idx]:
+                c = current.copy()
+                c[idx] += i
+                distribute(c, rem - i, idx + 1)
+
     for total in range(sum(min_selection), sum(max_horses) + 1):
         base = min_selection.copy()
         remaining = total - sum(base)
-
-        def distribute(current, rem, idx=0):
-            if idx == len(current) - 1:
-                if current[idx] + rem <= max_horses[idx]:
-                    alloc = current.copy()
-                    alloc[idx] += rem
-                    all_allocations.append(alloc)
-                return
-            for i in range(rem + 1):
-                if current[idx] + i <= max_horses[idx]:
-                    c = current.copy()
-                    c[idx] += i
-                    distribute(c, rem - i, idx + 1)
-
         distribute(base, remaining)
 
     # Evaluate each allocation
     results = []
-    race_list = sorted(blended_probs.keys())
-
     for allocation in all_allocations:
         cost = int(np.prod(allocation))
-
         if max_cost is not None and cost > max_cost:
             continue
 
-        total_prob = 1.0
-        # Product of per-race "ratio sums": sum(our_i / mkt_i) per race
-        # This is the correct factored form of sum-over-all-combos(our/mkt)
-        ratio_product = 1.0
+        ticket_score = 0.0
+        hit_prob = 1.0
         selections = {}
 
-        for i, race in enumerate(race_list):
-            top = sorted_horses[race][:allocation[i]]
-            race_prob = sum(p for _, p in top)
+        for i, race_num in enumerate(active_races):
+            top = sorted_horses[race_num][:allocation[i]]
+            race_score = sum(s for _, s, _ in top)
+            race_hit = sum(p for _, _, p in top if not np.isnan(p))
 
-            # Sum of our_prob/market_prob ratios for selected horses
-            race_ratio_sum = 0
-            for h, our_p in top:
-                mkt_p = market_probs[race].get(h, 0)
-                if mkt_p > 0:
-                    race_ratio_sum += our_p / mkt_p
-                else:
-                    race_ratio_sum += our_p / 1e-6  # avoid div zero
+            ticket_score += race_score
+            hit_prob *= race_hit if race_hit > 0 else 1e-6
+            selections[race_num] = [int(h) for h, _, _ in top]
 
-            total_prob *= race_prob
-            ratio_product *= race_ratio_sum
-            selections[race] = [h for h, _ in top]
-
-        if min_total_prob is not None and total_prob < min_total_prob:
+        if min_score is not None and ticket_score < min_score:
             continue
 
-        # Correct pari-mutuel EV:
-        # EV = (1 - takeout) * product(sum(our_i/mkt_i) per race) - cost
-        # Pool size cancels: payout = net_pool / (pool * mkt_combo_prob)
-        # and net_pool = pool * (1-takeout), so payout = (1-takeout) / mkt_combo_prob
-        ev = (1 - takeout_rate) * ratio_product - cost
+        results.append({
+            'cost': cost,
+            'score': ticket_score,
+            'hit_prob': hit_prob,
+            'selections': selections,
+            'allocation': allocation,
+        })
 
-        results.append((cost, ev, total_prob, selections))
-
-    # Sort by EV descending
-    results.sort(key=lambda x: x[1], reverse=True)
-
-    # Efficient frontier: best EV per cost level
-    frontier = []
-    best_ev = {}
+    # Pareto frontier on (cost, score): for each cost, keep best score
+    best_at_cost = {}
     for r in results:
-        cost = r[0]
-        if cost not in best_ev or r[1] > best_ev[cost]:
-            best_ev[cost] = r[1]
+        if r['cost'] not in best_at_cost or r['score'] > best_at_cost[r['cost']]['score']:
+            best_at_cost[r['cost']] = r
+
+    # Sort ascending by cost, prune dominated points
+    sorted_by_cost = sorted(best_at_cost.values(), key=lambda x: x['cost'])
+    frontier = []
+    max_score_seen = -np.inf
+    for r in sorted_by_cost:
+        if r['score'] > max_score_seen:
             frontier.append(r)
+            max_score_seen = r['score']
 
-    frontier.sort(key=lambda x: x[0])
-
-    # Sample frontier points
+    # Sample frontier evenly if large
     if frontier and budget_steps > 0 and budget_steps < len(frontier):
         indices = np.linspace(0, len(frontier) - 1, budget_steps, dtype=int)
         return [frontier[i] for i in indices]
@@ -236,56 +275,75 @@ def optimize_pick_tickets(df, race_numbers, blend_factor=0.5,
 
 
 # =============================================================================
-# 3. REPORTING
+# 4. REPORTING
 # =============================================================================
 
-def print_race_probs(df, race_numbers, prob_col='ensemble_prob', ml_col='ml_win_prob_norm'):
-    """Print probability table for the pick ticket races."""
+def print_race_probs(df, race_numbers, prob_col='ensemble_prob',
+                     ml_col='ml_win_prob_norm', ridge_col='ridge_value',
+                     score_col='composite_score'):
+    """Print per-race table with model prob, ML, ridge value, composite score."""
     has_ml = ml_col in df.columns and df[ml_col].notna().any()
+    has_ridge = ridge_col in df.columns and df[ridge_col].notna().any()
 
     for race_num in race_numbers:
         race = df[df['race'] == race_num].copy()
-        race = race.sort_values(prob_col, ascending=False)
+        if race.empty:
+            continue
+        # Sort by composite score (what the optimizer actually uses)
+        race = race.sort_values(score_col, ascending=False)
+
+        header = f"{'#':>3}  {'Model':>7}"
+        if has_ml:
+            header += f"  {'ML':>6}  {'Edge':>7}"
+        if has_ridge:
+            header += f"  {'Ridge$':>7}"
+        header += f"  {'Score':>7}"
 
         print(f"\n--- Race {race_num} ({len(race)} horses) ---")
+        print(header)
 
-        if has_ml:
-            print(f"{'#':>3} {'Model':>7} {'ML':>7} {'Edge':>7}")
-            for _, row in race.iterrows():
+        for _, row in race.iterrows():
+            parts = [f"{int(row['horse_number']):>3}",
+                     f"{row[prob_col]:>6.1%}"]
+            if has_ml:
+                ml_val = row.get(ml_col, np.nan)
                 edge = row.get('edge', np.nan)
-                edge_str = f"{edge:>+6.1%}" if pd.notna(edge) else f"{'—':>6}"
-                ml_str = f"{row[ml_col]:>6.1%}" if pd.notna(row.get(ml_col)) else f"{'—':>6}"
-                print(f"{int(row['horse_number']):>3} "
-                      f"{row[prob_col]:>6.1%} "
-                      f"{ml_str} "
-                      f"{edge_str}")
-        else:
-            print(f"{'#':>3} {'Model':>7}")
-            for _, row in race.iterrows():
-                print(f"{int(row['horse_number']):>3} {row[prob_col]:>6.1%}")
+                parts.append(f"{ml_val:>5.1%}" if pd.notna(ml_val) else f"{'—':>6}")
+                parts.append(f"{edge:>+6.1%}" if pd.notna(edge) else f"{'—':>7}")
+            if has_ridge:
+                rv = row.get(ridge_col, np.nan)
+                parts.append(f"{rv:>6.2f}" if pd.notna(rv) else f"{'—':>7}")
+            sc = row.get(score_col, np.nan)
+            parts.append(f"{sc:>6.1%}" if pd.notna(sc) else f"{'—':>6}")
+            print("  ".join(parts))
 
 
 def print_tickets(frontier, bet_type, top_n=10):
-    """Print top ticket options from the Pareto frontier."""
-    sorted_f = sorted(frontier, key=lambda x: x[1], reverse=True)
+    """
+    Print the top-N tickets from the Pareto frontier, sorted by composite
+    score descending (best ticket first, regardless of cost).
+    """
+    if not frontier:
+        print("  No tickets on frontier.")
+        return
 
-    print(f"\n{'='*65}")
-    print(f"TOP PICK {bet_type} TICKETS BY EXPECTED VALUE")
-    print(f"{'='*65}")
+    # Sort descending by score — best ticket first
+    sorted_f = sorted(frontier, key=lambda r: r['score'], reverse=True)
+    selected = sorted_f[:top_n]
 
-    for i, (cost, ev, prob, selections) in enumerate(sorted_f[:top_n]):
-        roi = ev / cost * 100 if cost > 0 else 0
-        # Expected payout if the ticket hits
-        exp_payout = (ev + cost) / prob if prob > 0 else 0
+    print(f"\n{'='*70}")
+    print(f"PICK {bet_type} — TOP {len(selected)} TICKETS BY COMPOSITE SCORE")
+    print(f"{'='*70}")
 
-        print(f"\nOption {i+1}: ${cost} ticket | EV ${ev:+,.2f} ({roi:+.1f}% ROI) | "
-              f"Hit {prob:.2%} | Avg payout ${exp_payout:,.0f}")
+    for i, r in enumerate(selected):
+        header_line = (f"Option {i+1}: ${r['cost']} ticket | "
+                       f"Score {r['score']:.3f} | "
+                       f"Hit {r['hit_prob']:.2%}")
+        print(f"\n{header_line}")
         print("-" * 55)
-
-        for race_key in sorted(selections.keys()):
-            race_num = int(race_key.split()[1])
-            horses = selections[race_key]
-            print(f"  R{race_num}: {', '.join(str(int(h)) for h in horses)}")
+        for race_num in sorted(r['selections'].keys()):
+            horses = r['selections'][race_num]
+            print(f"  R{race_num}: {', '.join(str(h) for h in horses)}")
 
 
 # =============================================================================
@@ -293,57 +351,64 @@ def print_tickets(frontier, bet_type, top_n=10):
 # =============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Pick N ticket optimizer (Pareto frontier)")
+    parser = argparse.ArgumentParser(
+        description="Pick N ticket optimizer (composite logistic + ridge heuristic)")
     parser.add_argument('--date', type=str, required=True, help='Date (e.g. 2026-04-08)')
     parser.add_argument('--track', type=str, required=True, help='Track (e.g. keeneland)')
     parser.add_argument('--races', type=str, required=True,
                         help='Race range: "1-5" or "3,4,5,6,7"')
-    parser.add_argument('--pool', type=int, default=100000, help='Estimated pool size ($)')
-    parser.add_argument('--takeout', type=float, default=0.22, help='Track takeout rate')
+    parser.add_argument('--alpha', type=float, default=0.5,
+                        help='Composite blend: 1.0=all logistic share, '
+                             '0.0=all ridge share (default 0.5)')
     parser.add_argument('--max-cost', type=int, default=None, help='Max ticket cost ($)')
-    parser.add_argument('--blend', type=float, default=0.5,
-                        help='Model weight (1.0=all model, 0.0=all ML)')
-    parser.add_argument('--min-prob', type=float, default=None,
-                        help='Min coverage per race (e.g. 0.7)')
-    parser.add_argument('--min-total', type=float, default=None,
-                        help='Min total hit probability')
-    parser.add_argument('--top-n', type=int, default=10, help='Number of tickets to show')
+    parser.add_argument('--min-score', type=float, default=None,
+                        help='Min composite score for a ticket')
+    parser.add_argument('--top-n', type=int, default=10,
+                        help='Number of tickets to show (default 10)')
     args = parser.parse_args()
+
+    if not 0.0 <= args.alpha <= 1.0:
+        print(f"  WARNING: alpha={args.alpha} outside [0,1]; clamping")
+        args.alpha = max(0.0, min(1.0, args.alpha))
 
     race_numbers = parse_race_range(args.races)
     bet_type = len(race_numbers)
 
     print(f"Pick {bet_type} Optimizer: {args.date} / {args.track}")
     print(f"  Races: {race_numbers}")
-    print(f"  Pool: ${args.pool:,}  |  Takeout: {args.takeout:.0%}  |  Blend: {args.blend}")
+    print(f"  Alpha: {args.alpha}  "
+          f"({args.alpha:.0%} logistic / {1-args.alpha:.0%} ridge value)")
     if args.max_cost:
         print(f"  Max cost: ${args.max_cost}")
 
     # Load predictions
     df = load_predictions(args.date, args.track)
-    available_races = sorted(df['race'].unique())
+    available_races = sorted(df['race'].dropna().unique())
     missing = [r for r in race_numbers if r not in available_races]
     if missing:
-        print(f"\n  WARNING: Races {missing} not in predictions (available: {available_races})")
+        print(f"\n  WARNING: Races {missing} not in predictions "
+              f"(available: {available_races})")
         race_numbers = [r for r in race_numbers if r in available_races]
         if len(race_numbers) < 2:
             print("  Need at least 2 races. Exiting.")
             return
 
-    # Print race probabilities
+    # Build composite score
+    if 'ridge_value' not in df.columns or not df['ridge_value'].notna().any():
+        print(f"  No ridge_value column present — composite will be pure logistic")
+    df = build_composite_score(df, alpha=args.alpha)
+
+    # Print race tables (sorted by composite score)
     print_race_probs(df, race_numbers)
 
     # Run optimizer
     print(f"\nOptimizing Pick {len(race_numbers)} tickets...")
     frontier = optimize_pick_tickets(
         df, race_numbers,
-        blend_factor=args.blend,
-        pool_size=args.pool,
-        takeout_rate=args.takeout,
+        alpha=args.alpha,
         max_cost=args.max_cost,
-        min_prob=args.min_prob,
-        min_total_prob=args.min_total,
-        budget_steps=500,
+        min_score=args.min_score,
+        budget_steps=250,
     )
 
     if not frontier:
