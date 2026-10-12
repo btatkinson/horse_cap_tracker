@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 import argparse
 
@@ -56,10 +57,13 @@ def parse_entries(table):
             if horse_link:
                 horse_name = horse_link.text.strip()
             else:
-                # Scratched horses might not have a link, just text
-                horse_name = horse_element.text.strip()
-                
-                running = 0  # If there's no link, assume scratched
+                # No link = HRN has no profile page yet, typically a foreign
+                # horse making its US debut ("Indomiknow (IRE) (82)"). That is
+                # not a scratch (10/10: When It Matters (IRE) and Braida (FR)
+                # ran 6th and 3rd after being dropped here). Scratches are
+                # read from the row class and the Scratched? column below.
+                # The plain text carries HRN's figure, so strip it.
+                horse_name = re.sub(r'\s*\(-?\d+\*?\)\s*$', '', horse_element.get_text(' ', strip=True))
         else:
             horse_name = ''
             running = 0  # If no horse element, assume scratched

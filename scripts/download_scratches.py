@@ -82,6 +82,18 @@ def apply(track: str, date: str, scratches, draw_ins):
         raise SystemExit(f"{path} has no rows for {date}; run download_upc.py first")
     num = pd.to_numeric(e['horse'].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
     key = e['horse_name'].astype(str).str.lower().str.replace(r'\(.*?\)|[^a-z0-9]', '', regex=True)
+    # Keeneland's list is the source of truth: start from "main body runs, AEs
+    # don't", then apply it. HRN can mark runners as scratched (10/10: R5 #1
+    # When It Matters and R9 #6 Braida both ran, 6th and 3rd).
+    day = e['date'] == date
+    ae = e['also_eligible'].fillna(0).astype(int) == 1 if 'also_eligible' in e else pd.Series(False, index=e.index)
+    listed = {(r, h) for r, h, _ in scratches} | {
+        (r, k) for r, _, n in scratches for k in [re.sub(r'\(.*?\)|[^a-z0-9]', '', n.lower())] if k}
+    for i, r in e[day & ~ae & (e['running'] == 0)].drop_duplicates(['race', 'horse']).iterrows():
+        if (r['race'], num[i]) not in listed and (r['race'], key[i]) not in listed:
+            print(f"  note: R{r['race']} #{r['horse']} {r['horse_name']} was marked out by HRN but isn't on "
+                  f"Keeneland's scratch list; counting it as running")
+    e.loc[day, 'running'] = (~ae[day]).astype(int)
     for (race, horse, name), running in [(s, 0) for s in scratches] + [(d, 1) for d in draw_ins]:
         in_race = (e['date'] == date) & (e['race'] == race)
         # Match by name first: the page sometimes has the wrong program number

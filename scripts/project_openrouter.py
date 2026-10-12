@@ -136,12 +136,16 @@ def main():
     if ent.empty:
         raise SystemExit(f"upc_entries/{args.track}.csv has no rows for {args.date} — run download_upc.py")
     ent['horse_number'] = pd.to_numeric(ent['horse'].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
+    # HRN sometimes lists a horse twice (10/10 R9 Braida); keep the row with an ML.
+    ent = (ent.assign(_no_ml=ent['ml_odds'].isna()).sort_values('_no_ml', kind='stable')
+              .drop_duplicates(['race', 'horse_number']).drop(columns='_no_ml').sort_index())
     if args.starters_from_results:
         rf = DATA_PATH / 'entries' / f'{args.track}_{args.date}.csv'
         res_e = pd.read_csv(rf)
         res_e['horse_number'] = pd.to_numeric(res_e['horse'].astype(str).str.extract(r'(\d+)')[0],
                                               errors='coerce')
-        ran = res_e.set_index(['race', 'horse_number'])['running']
+        # HRN can list a scratched horse twice; a horse ran if any of its rows did.
+        ran = res_e.groupby(['race', 'horse_number'])['running'].max()
         ent['running'] = [int(ran.get((r, h), 0)) for r, h in zip(ent['race'], ent['horse_number'])]
         print(f"Field from results: {int(ent['running'].sum())} starters")
     for flag, value, running in (('--scratch', args.scratch, 0), ('--draw-in', args.draw_in, 1)):
