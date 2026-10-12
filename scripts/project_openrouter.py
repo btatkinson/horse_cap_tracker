@@ -40,6 +40,7 @@ from diagnose_segments import life_starts, name_key
 DATA_PATH = Path(os.environ['DATA_PATH'])
 BLEND_PATH = DATA_PATH / 'openrouter_blend.json'
 FLOOR = 0.003
+FADE_MIN_FAV_ODDS = 2.0   # tracked fade rule: ML favorite longer than this (field-adjusted)
 
 
 def ml_to_prob(s):
@@ -230,7 +231,7 @@ def main():
         g['rank'] = g['proj_prob'].rank(ascending=False, method='first').astype(int)
         out.append(g)
 
-    res = pd.concat(out).sort_values(['race', 'rank'])
+    res = pd.concat(out).sort_values(['race', 'rank']).reset_index(drop=True)
 
     # Pre-race bet rule frozen in the blend JSON (fit_openrouter_blend --save --keep):
     # top pick, ML longer than min_ml, and P x (ML+1) at or above the historical cutoff.
@@ -245,11 +246,22 @@ def main():
     # 'bet' is the frozen rule (graded on every race); 'play' is what gets wagered.
     res['play'] = res['bet'] & (res['fts_share'] < args.fts_cutoff)
 
+    # Tracked rule, never played (added 2026-10-12): when the ML favorite is
+    # longer than 2-1 after scratches (no obvious favorite), $2 win on the
+    # model's top pick among the non-favorites. Held out over 240 races it
+    # returned +40% on 92 bets (95% CI -6% to +90%). It was found after looking
+    # at the data, so it is graded on new cards before any money goes on it.
+    res['fade'] = False
+    for _, g in res.groupby('race'):
+        fav = g['ml_prob'].idxmax()
+        if len(g) > 1 and g.loc[fav, 'ml_adj_decimal'] > FADE_MIN_FAV_ODDS:
+            res.loc[g.drop(fav)['proj_prob'].idxmax(), 'fade'] = True
+
     out_dir = DATA_PATH / 'predictions' / args.date / args.track
     out_dir.mkdir(parents=True, exist_ok=True)
     cols = ['race', 'rank', 'horse_number', 'horse_name', 'ml_odds', 'ml_prob',
             *[f'{p}_p' for p in providers], 'llm_prob', 'proj_prob', 'fair_odds',
-            'ev_at_ml', 'ml_adj_decimal', 'score', 'bet', 'play', 'starts', 'fts_share',
+            'ev_at_ml', 'ml_adj_decimal', 'score', 'bet', 'play', 'fade', 'starts', 'fts_share',
             'proj_beyer', 'pred_close_prob', 'trainer', 'jockey']
     res[cols].to_csv(out_dir / args.out, index=False)
 
@@ -266,6 +278,8 @@ def main():
               f" {'Proj%':>6} {'Fair':>7} {'EV@ML':>6} {'Beyer':>5}")
         for _, r in g.iterrows():
             flag = '  <- BET' if r['play'] else '  <- rule bet, FTS-heavy race: TRACK ONLY' if r['bet'] else ''
+            if r['fade']:
+                flag += '  <- tracked: fade'
             sts = '?' if pd.isna(r['starts']) else 'FTS' if r['starts'] == 0 else f"{int(r['starts'])}"
             print(f"  {int(r['horse_number']):>3} {str(r['horse_name'])[:20]:<20} {sts:>3} {r['ml_odds']:>5} "
                   f"{r['ml_adj_decimal']:>4.1f} "
@@ -286,6 +300,14 @@ def main():
             print(f"  R{int(r['race'])} #{int(r['horse_number'])} {r['horse_name']} (ML {r['ml_odds']}, "
                   f"field-adjusted {r['ml_adj_decimal']:.1f}-1): "
                   f"model {r['proj_prob']:.1%}, score {r['score']:.2f} -> {action}")
+    fades = res[res['fade']]
+    print(f"\nTracked fade rule (not played): when the ML favorite is longer than {FADE_MIN_FAV_ODDS:g}-1 "
+          f"after scratches, $2 win on the model's best non-favorite")
+    if fades.empty:
+        print("  No races qualify.")
+    for _, r in fades.iterrows():
+        print(f"  R{int(r['race'])} #{int(r['horse_number'])} {r['horse_name']} (ML {r['ml_odds']}, "
+              f"field-adjusted {r['ml_adj_decimal']:.1f}-1): model {r['proj_prob']:.1%}")
 
 
 if __name__ == '__main__':
